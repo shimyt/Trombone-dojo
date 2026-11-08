@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="15分道場">
+<meta name="robots" content="noindex">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>トロンボーン15分道場</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Rajdhani:wght@500;600;700&display=swap">
+<style>
+/* Layout: arcade console. Home = stage map with cheer buddy; stage = score sheet on a lit stage + live meter + buddy reactions. Dark, committed. */
+:root {
+  --bg: #0c0f17; --panel: #151a26; --panel2: #1e2535; --line: #2a3346; --staff: #5b6680;
+  --fg: #eef1f7; --mute: #8e98ad; --accent: #ffb020; --accent2: #35d6c8;
+  --good: #4ade80; --warn: #fbbf24; --bad: #f87171; --perfect: #ffd54a; --boss: #8b5cf6;
+  --display: "Rajdhani", "Zen Kaku Gothic New", system-ui, sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: radial-gradient(1200px 600px at 50% -200px, #1b2340 0%, var(--bg) 60%) fixed, var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; }
+* { box-sizing: border-box; }
+button { font-family: inherit; font-size: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+.app { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.brand { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .04em; } .brand span { color: var(--accent); }
+.stat { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.stat .k, .sc .k { font-size: 11px; color: var(--mute); letter-spacing: .1em; }
+.stat .v { font-family: var(--display); font-weight: 700; font-size: 20px; }
+.xpbar { flex: 1 1 140px; height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; min-width: 100px; }
+.xpbar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent2), var(--accent)); transition: width .5s; }
+.mic { font-size: 12px; color: var(--mute); display: flex; align-items: center; gap: 6px; }
+.mic b { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); display: inline-block; }
+.mic.on b { background: var(--good); box-shadow: 0 0 8px var(--good); }
+.stage { display: flex; flex-direction: column; gap: 14px; }
+.quote { padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 12px 12px 0; }
+.quote .who { font-size: 11px; color: var(--mute); letter-spacing: .08em; }
+.quote .q { font-weight: 700; font-size: 16px; } .quote .qe { color: var(--mute); font-size: 13px; }
+/* buddy */
+.buddy { display: flex; align-items: flex-end; gap: 10px; }
+.buddy svg { width: 76px; height: 76px; flex: none; animation: bob 2.4s ease-in-out infinite; }
+.buddy.jump svg { animation: jump .55s ease-out, bob 2.4s ease-in-out .55s infinite; }
+.buddy.sad svg { animation: shake .4s; }
+.bubble { position: relative; background: var(--panel2); border: 1px solid var(--line); border-radius: 16px 16px 16px 4px; padding: 9px 14px; font-weight: 700; font-size: 15px; min-width: 0; margin-bottom: 14px; }
+@keyframes bob { 50% { transform: translateY(-4px); } }
+@keyframes jump { 30% { transform: translateY(-18px) rotate(-6deg); } 60% { transform: translateY(0) scale(1.08, .92); } }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+/* map */
+.map { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.map .link { width: 22px; height: 3px; background: var(--line); border-radius: 2px; }
+.node { background: none; border: 0; color: var(--fg); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px; border-radius: 12px; min-width: 96px; }
+.node:hover { background: var(--panel2); }
+.node .orb { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 24px; background: var(--panel2); border: 3px solid var(--line); transition: transform .15s; }
+.node:hover .orb { transform: scale(1.08); }
+.node.done .orb { border-color: var(--good); box-shadow: 0 0 14px rgba(74,222,128,.35); }
+.node.boss .orb { border-color: var(--boss); background: #241640; box-shadow: 0 0 18px rgba(139,92,246,.45); }
+.node.boss.done .orb { border-color: var(--perfect); }
+.node .nm { font-family: var(--display); font-size: 11px; letter-spacing: .12em; color: var(--mute); }
+.node.boss .nm { color: var(--boss); }
+.node .nn { font-weight: 700; font-size: 14px; }
+.node .st { font-size: 12px; color: var(--perfect); letter-spacing: .1em; min-height: 1.4em; }
+.btn { background: var(--accent); color: #1a1200; border: 0; border-radius: 12px; padding: 12px 20px; font-weight: 900; font-size: 16px; box-shadow: 0 4px 0 #a86f00; transition: transform .08s, box-shadow .08s; }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
+.btn.big { font-size: 19px; padding: 14px 30px; }
+.btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); box-shadow: none; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.settings { display: flex; gap: 8px 14px; flex-wrap: wrap; align-items: center; color: var(--mute); font-size: 13px; }
+.settings input[type=number] { width: 64px; background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.hist { display: flex; gap: 3px; align-items: flex-end; height: 56px; width: 180px; } .hist i { flex: 1; background: var(--panel2); border-radius: 3px 3px 0 0; } .hist i.on { background: var(--accent2); }
+.histl { font-size: 11px; color: var(--mute); text-align: right; }
+/* stage */
+.stagehead { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.stagehead h2 { margin: 0; font-size: 21px; flex: 1 1 auto; }
+.tag { font-family: var(--display); font-size: 13px; letter-spacing: .12em; padding: 2px 8px; border-radius: 6px; background: var(--panel2); color: var(--accent2); vertical-align: middle; }
+.tag.boss { background: #241640; color: var(--boss); }
+.sc b { font-family: var(--display); font-size: 24px; font-variant-numeric: tabular-nums; color: var(--accent); }
+.time { font-family: var(--display); font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.arena { position: relative; background: linear-gradient(180deg, #171d2c, var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 18px; min-height: 320px; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.arena.intro { gap: 14px; }
+.arena canvas.fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+.arena.fever { animation: fever .5s ease-in-out infinite alternate; border-color: var(--accent); }
+@keyframes fever { from { box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(255,176,32,.35) inset; } to { box-shadow: 0 0 0 2px var(--perfect), 0 0 40px rgba(255,213,74,.5) inset; } }
+.arena.shake { animation: shake .3s; }
+.plist { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.pv { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; overflow-x: auto; }
+.pv .pt, .ptitle { font-weight: 700; font-size: 14px; color: var(--accent2); }
+.ptitle { font-size: 17px; }
+.staffwrap { width: 100%; overflow-x: auto; display: flex; justify-content: center; background: var(--bg); border-radius: 12px; padding: 4px 8px; }
+.staffsvg { width: 100%; height: auto; display: block; }
+.staffsvg ellipse.pop { animation: pop .35s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes pop { 40% { transform: scale(1.7); } }
+.phase { font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: .08em; min-height: 1.3em; color: var(--mute); }
+.phase.ref { color: var(--accent2); } .phase.play { color: var(--perfect); } .phase.count { color: var(--warn); font-size: 44px; animation: pop .3s; } .phase.count.go { color: var(--perfect); }
+.meter { width: 100%; max-width: 520px; }
+.meter .scale { position: relative; height: 50px; }
+.meter .zone { position: absolute; top: 16px; height: 18px; border-radius: 4px; background: var(--panel2); left: 0; right: 0; }
+.meter .zone i { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
+.meter .zone .ok { left: 5%; right: 5%; background: rgba(251,191,36,.14); } .meter .zone .great { left: 25%; right: 25%; background: rgba(74,222,128,.22); } .meter .zone .perfect { left: 40%; right: 40%; background: rgba(255,213,74,.45); }
+.meter .needle { position: absolute; top: 4px; width: 4px; height: 42px; margin-left: -2px; background: var(--fg); border-radius: 2px; left: 50%; transition: left .06s linear; box-shadow: 0 0 10px rgba(255,255,255,.4); }
+.meter .needle.off { opacity: .2; }
+.meter .lbl { display: flex; justify-content: space-between; font-family: var(--display); font-size: 12px; color: var(--mute); }
+.readout { display: flex; gap: 8px 22px; font-family: var(--display); font-variant-numeric: tabular-nums; font-size: 15px; color: var(--mute); flex-wrap: wrap; justify-content: center; }
+.readout b { color: var(--fg); font-size: 20px; }
+.judge { position: absolute; top: 12px; right: 16px; z-index: 6; text-align: right; opacity: 0; transform: translateY(8px) scale(.85); transition: opacity .12s, transform .12s; text-shadow: 0 2px 14px rgba(0,0,0,.7); }
+.judge b { display: block; font-size: 38px; font-weight: 900; line-height: 1.1; } .judge small { font-family: var(--display); font-size: 14px; letter-spacing: .1em; }
+.judge.show { opacity: 1; transform: none; }
+.judge.P { color: var(--perfect); } .judge.G { color: var(--good); } .judge.O { color: var(--warn); } .judge.M { color: var(--bad); }
+.combo { position: absolute; top: 12px; left: 16px; z-index: 6; font-family: var(--display); font-weight: 700; font-size: 34px; color: var(--accent2); line-height: 1; }
+.combo small { display: block; font-size: 12px; color: var(--mute); letter-spacing: .15em; }
+.hint { color: var(--mute); font-size: 13px; text-align: center; max-width: 560px; } .hint.big { font-size: 15px; color: var(--fg); }
+/* breath */
+.breath { width: 210px; height: 210px; border-radius: 50%; background: radial-gradient(circle, var(--accent2) 0%, rgba(53,214,200,.15) 60%, transparent 70%); transform: scale(.5); transition: transform 1s linear; display: flex; align-items: center; justify-content: center; font-family: var(--body); font-size: 22px; font-weight: 900; color: #04201d; text-align: center; }
+.breath.push { background: radial-gradient(circle, var(--accent) 0%, rgba(255,176,32,.2) 60%, transparent 70%); }
+.pressure { width: 100%; max-width: 420px; height: 10px; background: var(--panel2); border-radius: 5px; overflow: hidden; } .pressure i { display: block; height: 100%; width: 0; background: var(--accent2); transition: width .1s; }
+.lesson { text-align: center; font-weight: 700; font-size: 16px; max-width: 560px; min-height: 3.2em; } .lesson span { display: block; font-weight: 400; font-size: 13px; color: var(--mute); }
+/* boss */
+.bossbox { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; max-width: 560px; }
+.bossimg { width: 70px; height: 62px; flex: none; animation: bob 1.6s ease-in-out infinite; } .bossimg.hurt { animation: hurt .35s; }
+@keyframes hurt { 30% { transform: translateX(8px) rotate(8deg); filter: brightness(2.2); } }
+.hpwrap { flex: 1; } .hpname { font-family: var(--display); font-size: 12px; letter-spacing: .15em; color: var(--boss); }
+.hp { height: 14px; background: var(--panel2); border-radius: 7px; overflow: hidden; border: 1px solid #3b2a66; } .hp i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ef4444, #f97316); transition: width .3s; }
+.dmg { position: absolute; left: 60px; top: -6px; font-family: var(--display); font-weight: 700; color: var(--perfect); font-size: 20px; animation: up .9s ease-out forwards; }
+@keyframes up { to { transform: translateY(-30px); opacity: 0; } }
+.scope { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.sp { background: var(--panel2); border: 2px solid var(--line); border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 0; transition: border-color .15s; }
+.sp.live { border-color: var(--perfect); box-shadow: 0 0 14px rgba(255,213,74,.3); }
+.sp canvas { width: 100%; height: auto; border-radius: 6px; display: block; }
+.spn { font-family: var(--display); font-size: 12px; letter-spacing: .12em; color: var(--mute); }
+.chk { display: flex; flex-direction: column; gap: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.chk span { padding: 1px 6px; border-radius: 4px; background: var(--bg); }
+.chk span::before { margin-right: 4px; } .chk .l0::before { content: '◎'; } .chk .l1::before { content: '○'; } .chk .l2::before { content: '△'; } .chk .l3::before { content: '×'; }
+.chk .l0 { color: var(--perfect); } .chk .l1 { color: var(--good); } .chk .l2 { color: var(--warn); } .chk .l3 { color: var(--bad); }
+.why { width: 100%; background: var(--bg); border-radius: 10px; padding: 10px 14px; font-size: 14px; min-height: 3em; } .why b { color: var(--accent2); }
+@media (max-width: 620px) { .scope { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.report { gap: 12px; }
+.rhead { font-family: var(--display); letter-spacing: .2em; color: var(--mute); font-size: 14px; } .rhead span { margin-left: 8px; }
+.total { position: relative; z-index: 6; font-family: var(--display); font-weight: 700; font-size: 92px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--fg); text-shadow: 0 0 24px rgba(53,214,200,.35); }
+.total small { font-size: 28px; margin-left: 4px; color: var(--mute); }
+.total.reveal { color: var(--perfect); animation: stamp .45s cubic-bezier(.2,1.6,.4,1); text-shadow: 0 0 40px rgba(255,213,74,.6); }
+.diff { min-height: 1.6em; font-family: var(--display); font-size: 20px; font-weight: 700; } .diff .up { color: var(--good); } .diff .down { color: var(--bad); }
+.rgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; width: 100%; align-items: start; }
+.rcol { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.radarsvg { width: 100%; max-width: 360px; margin: 0 auto; display: block; } .radar { animation: grow 1s ease-out 2.3s both; transform-origin: 150px 140px; }
+@keyframes grow { from { transform: scale(0); opacity: 0; } }
+.legend { font-size: 12px; color: var(--mute); text-align: center; } .legend i { display: inline-block; width: 18px; height: 3px; margin: 0 4px 3px 8px; vertical-align: middle; } .legend .l1 { background: var(--accent2); } .legend .l2 { border-top: 2px dashed var(--mute); }
+.wt { font-weight: 900; color: var(--accent); letter-spacing: .05em; }
+.weak { display: flex; gap: 10px; align-items: flex-start; background: var(--panel2); border-radius: 10px; padding: 10px 12px; animation: slidein .5s ease-out both; }
+.weak b { font-family: var(--display); font-size: 28px; line-height: 1; color: var(--bad); flex: none; width: 22px; text-align: center; }
+.weak:nth-of-type(2) b { color: var(--bad); } .wtitle { font-weight: 700; } .wtip { font-size: 13px; color: var(--mute); }
+.bestline { font-size: 14px; animation: slidein .5s ease-out both; } .bestline b { color: var(--good); }
+@keyframes slidein { from { transform: translateX(30px); opacity: 0; } }
+.trendsvg { width: 100%; height: auto; }
+@media (max-width: 620px) { .rgrid { grid-template-columns: 1fr; } .total { font-size: 64px; } }
+/* result */
+.result { text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; position: relative; z-index: 6; }
+.stamp { font-family: var(--display); font-size: 96px; font-weight: 700; line-height: 1; color: var(--accent); animation: stamp .5s cubic-bezier(.2,1.6,.4,1); text-shadow: 0 0 30px rgba(255,176,32,.5); }
+.stamp.rS { color: var(--perfect); } .stamp.rD, .stamp.rC { color: var(--mute); text-shadow: none; }
+@keyframes stamp { from { transform: scale(3) rotate(-15deg); opacity: 0; } }
+.result .score { font-family: var(--display); font-size: 48px; font-weight: 700; line-height: 1; }
+.xpgain { color: var(--accent2); font-weight: 700; }
+.result table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.result td { padding: 3px 12px; color: var(--mute); text-align: left; } .result td:last-child { color: var(--fg); text-align: right; font-family: var(--display); font-size: 17px; }
+.result td.okc { color: var(--good); } .result td.ngc { color: var(--warn); }
+.levelup { font-family: var(--display); font-size: 40px; color: var(--perfect); font-weight: 700; animation: stamp .6s; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; max-width: 90%; font-size: 14px; z-index: 20; }
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+@media (max-width: 520px) { .judge b { font-size: 28px; } .phase.count { font-size: 36px; } .node { min-width: 80px; } .map .link { display: none; } .stamp { font-size: 72px; } }
+/* v7: big feedback, per-stage visualization, tendencies */
+.judge em { display: block; font-style: normal; font-size: 26px; font-weight: 900; line-height: 1.15; }
+.judge small { font-size: 13px; opacity: .8; }
+.coach { width: 100%; display: flex; gap: 16px; align-items: stretch; background: var(--bg); border: 2px solid var(--line); border-radius: 14px; padding: 14px 18px; min-height: 104px; position: relative; z-index: 6; }
+.coach .cv { flex: none; width: 190px; display: flex; flex-direction: column; justify-content: center; gap: 2px; border-right: 1px solid var(--line); padding-right: 14px; }
+.coach .cn { font-size: 13px; color: var(--mute); font-weight: 700; }
+.coach .cv b { font-size: 34px; font-weight: 900; line-height: 1.1; color: var(--fg); }
+.coach .cv small { font-family: var(--display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg); }
+.coach .ca { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.coach .lab, .nextcard .lab, .tend .lab { font-size: 13px; letter-spacing: .12em; color: var(--accent2); font-weight: 900; }
+.coach .act { font-size: 22px; font-weight: 900; line-height: 1.4; }
+.coach .sub { font-size: 15px; color: var(--mute); }
+.coach.l0 { border-color: var(--perfect); } .coach.l0 .cv b { color: var(--perfect); }
+.coach.l1 { border-color: var(--good); } .coach.l1 .cv b { color: var(--good); }
+.coach.l2 { border-color: var(--warn); } .coach.l2 .cv b { color: var(--warn); }
+.coach.l3 { border-color: var(--bad); } .coach.l3 .cv b { color: var(--bad); }
+.coach.flash { animation: cflash .45s ease-out; }
+@keyframes cflash { 40% { transform: scale(1.015); box-shadow: 0 0 26px rgba(255,213,74,.28); } }
+.scope { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
+.scope.one { grid-template-columns: 1fr; }
+.spn { font-size: 15px; color: var(--fg); font-weight: 700; letter-spacing: .04em; } .spn span { color: var(--accent2); }
+.chk { font-size: 15px; gap: 4px; } .chk span { padding: 4px 8px; font-weight: 700; border-radius: 6px; }
+.howto { width: 100%; font-size: 15px; color: var(--mute); background: var(--bg); border-radius: 10px; padding: 8px 14px; } .howto summary { cursor: pointer; color: var(--accent2); font-weight: 700; }
+.bcv { width: 100%; max-width: 720px; height: auto; border-radius: 10px; display: block; }
+.readout { font-size: 17px; } .readout b { font-size: 26px; }
+.nextcard { width: 100%; max-width: 640px; text-align: left; background: var(--bg); border: 2px solid var(--warn); border-radius: 14px; padding: 14px 18px; }
+.nextcard.l0 { border-color: var(--perfect); }
+.nextcard .nt { font-size: 22px; font-weight: 900; line-height: 1.4; }
+.nextcard .na { font-size: 17px; margin-top: 4px; line-height: 1.5; }
+.nextcard.big { max-width: none; } .nextcard.big .nt { font-size: 26px; } .nextcard.big .na { font-size: 18px; }
+.tend { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; animation: slidein .5s ease-out 2.4s both; }
+.tend .head { font-size: 24px; font-weight: 900; line-height: 1.4; }
+.tend .strong { font-size: 15px; color: var(--good); font-weight: 700; }
+.tchips { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.tchip { background: var(--panel2); border-radius: 10px; padding: 8px 12px; border-left: 4px solid var(--line); text-align: left; }
+.tchip .tn { font-size: 13px; color: var(--mute); font-weight: 700; } .tchip .tv { font-family: var(--display); font-size: 26px; font-weight: 700; line-height: 1.15; } .tchip .tt { font-size: 14px; }
+.tchip.l0 { border-left-color: var(--perfect); } .tchip.l0 .tv { color: var(--perfect); } .tchip.l1 { border-left-color: var(--warn); } .tchip.l1 .tv { color: var(--warn); } .tchip.l2 { border-left-color: var(--bad); } .tchip.l2 .tv { color: var(--bad); }
+.vgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; width: 100%; }
+.vbox { background: var(--bg); border-radius: 12px; padding: 10px 14px; min-width: 0; display: flex; flex-direction: column; gap: 6px; } .vbox svg { width: 100%; height: auto; display: block; }
+.hlist { font-size: 16px; display: flex; flex-direction: column; gap: 4px; } .hlist .up { color: var(--good); font-weight: 700; } .hlist .down { color: var(--bad); font-weight: 700; } .hlist .habit { color: var(--warn); font-weight: 700; }
+.wtitle { font-size: 17px; } .wtip { font-size: 15px; }
+@media (max-width: 620px) { .coach { flex-direction: column; gap: 6px; } .coach .cv { width: auto; border-right: 0; padding-right: 0; flex-direction: row; align-items: baseline; gap: 10px; flex-wrap: wrap; } .coach .act { font-size: 19px; } .vgrid { grid-template-columns: 1fr; } .scope:not(.one) { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tend .head { font-size: 20px; } }
+
+/* v11: wide layout */
+.app { max-width: 1480px; }
+.pcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; width: 100%; align-items: start; position: relative; z-index: 5; }
+.pleft, .pright { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
+.pright .scope { grid-template-columns: repeat(var(--nw, 2), minmax(0, 1fr)); }
+.pright .scope.one { grid-template-columns: 1fr; }
+.plist { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.arena.report { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 14px; }
+.arena.report > .rhead, .arena.report > .total, .arena.report > .diff, .arena.report > .rgrid, .arena.report > .row, .arena.report > .fx { grid-column: 1 / -1; }
+.arena.report > .rhead, .arena.report > .total, .arena.report > .diff { justify-self: center; }
+.arena.report > .tend { grid-column: 1; } .arena.report > .nextcard.big { grid-column: 2; align-self: stretch; }
+.arena.report > .vgrid { grid-column: 1; grid-template-columns: 1fr 1fr; } .arena.report > .vbox { grid-column: 2; align-self: stretch; }
+@media (max-width: 1100px) { .pcols { grid-template-columns: 1fr; } .arena.report { display: flex; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">15分<span>道場</span></div>
+    <div class="stat"><span class="k">Lv</span><span class="v" id="lv">1</span></div>
+    <div class="xpbar"><i id="xpfill"></i></div>
+    <div class="stat"><span class="k">XP</span><span class="v" id="xp">0</span></div>
+    <div class="stat"><span class="k">連続</span><span class="v" id="streak">0</span><span class="k">日</span></div>
+    <div class="mic" id="mic"><b></b><span>マイク 未接続</span></div>
+  </div>
+  <div id="view"></div>
+</div>
+<script src="teacher_ref.js"></script>
+<script>
+(() => {
+'use strict';
+const QUOTES = [
+  ['音のツボの真ん中に当てると、力まなくても音が前に飛ぶ', '音色', '低い側に当たると音がこもって暗くなる。息のスピードで真ん中へ'],
+  ['唇は震わせるものではなく、息が通ると震えるもの', '息', 'バズを唇で作ろうとしない。先に息のスピード'],
+  ['出た瞬間に音程が決まっている音が、一番よく聞こえる', 'アタック', '短い音ほど立ち上がりが大事。音程が分かる前に音が終わる'],
+  ['頑張って吹くより、出だしをきれいにする方が音は抜ける', 'アタック', '音量ではなく輪郭で届かせる'],
+  ['スライドは握らず、指の間で遊ばせる', 'スライド', '握ると動きが遅れて、着地がずれる'],
+  ['音の最後まで息の圧を保つ', '息', '後半で圧が落ちると音程が下がる。最後の2拍で少し足すくらいで丁度いい'],
+  ['開放のB♭は下がりやすい音', '音程', 'スライドで上げられない音。唇の支えと息のスピードで真ん中に当てる'],
+  ['高い音は唇を締めるのではなく、息を速くする', '音域', '出口を少し狭くして、息のスピードで上げる'],
+  ['フレーズは一筆書きで吹く', '歌い方', '音符を一つずつ置かず、息で一本の線を描く'],
+  ['唇の張りが緩むと、音がぶら下がる', '音色', '程よい張りを保つと雑音が減り、音程も安定する'],
+  ['タンギングは英語のTのように一瞬で離す', 'アタック', '舌が長く触れると音の頭が重くなる'],
+  ['音を出した後に押さない', 'アタック', '頭で決めて、あとは流す。後押しは不安定に聞こえる'],
+  ['吹く前のブレスで、出だしの質が決まる', '息', 'テンポの中で、短く深く吸う'],
+  ['低い音でも、高い音が出る口のままでいる', '口の形', '音域で口を作り変えない'],
+  ['マウスピースだけで正しい音程を出す練習は、芯のある音を作る', '音程', '唇のピッチと楽器のピッチが揃うと音が太くなる'],
+  ['息そのものを歌わせる', '歌い方', '機械のように一定に送るのではなく、フレーズの形に息を乗せる'],
+];
+const NOTE_NAMES = ['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'];
+const midiName = m => NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1);
+const POS = { 46:1, 48:6, 50:4, 51:3, 52:2, 53:1, 55:4, 56:3, 57:2, 58:1, 60:3, 62:1, 63:3, 65:1 };
+const $ = s => document.querySelector(s);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+// ---------- voices ----------
+const VOICES = {
+  c1: 'いち', c2: 'に', c3: 'さん', go: 'はい', in: '吸って', out: '吐いて', push: '圧を上げて',
+  i_breath: '呼吸から始めます。4拍で吸って、16拍で吐きます。',
+  v_long: 'ロングトーンです。お手本を聴いて、いち、に、さん、はい、で入ります。',
+  v_attack: 'アタックです。お手本のあと、いち、に、さん、はい、で4回、ティ。',
+  v_slide: 'スライドです。Gは4番を少し遠く。B♭は下がらないように。',
+  v_boss: 'ボス戦です。苦手フレーズをやっつけましょう。',
+  v_win: '撃破！お見事です。',
+};
+QUOTES.forEach((q, i) => { VOICES['q' + String(i).padStart(2, '0')] = q[0] + '。' + q[2]; });
+const TTS = {
+  cache: {}, missing: {},
+  play(id) {
+    return new Promise(res => {
+      const f = 'voices/' + id + '.wav'; if (this.missing[f]) return res(false);
+      const a = this.cache[f] || (this.cache[f] = new Audio(f));
+      a.onerror = () => { this.missing[f] = true; res(false); };
+      try { a.currentTime = 0; } catch (e) {}
+      const p = a.play(); if (p && p.then) p.then(() => res(true)).catch(() => { this.missing[f] = true; res(false); }); else res(true);
+    });
+  },
+  speak(text, rate) {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; u.rate = rate;
+    const vs = speechSynthesis.getVoices(); const v = vs.find(v => v.lang === 'ja-JP' && /Otoya|Hattori|Kyoko/.test(v.name)) || vs.find(v => v.lang === 'ja-JP'); if (v) u.voice = v;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  },
+  say(id) { if (!S.voice) return; this.play(id).then(ok => { if (!ok) this.speak(VOICES[id] || id, id.length <= 4 ? 1.2 : 1.0); }); },
+};
+if ('speechSynthesis' in window) speechSynthesis.getVoices();
+['c1', 'c2', 'c3', 'go', 'in', 'out', 'push'].forEach(id => { const a = new Audio('voices/' + id + '.wav'); a.preload = 'auto'; a.onerror = () => { TTS.missing['voices/' + id + '.wav'] = true; }; TTS.cache['voices/' + id + '.wav'] = a; });
+
+// ---------- stages ----------
+const STAGES = [
+  { id: 'A1', name: '呼吸', icon: '風', dur: 120, xp: 60, desc: '4拍吸って16拍吐く。最後の4拍で圧を上げる', kind: 'breath' },
+  { id: 'A2', name: 'ロングトーン', icon: '♩', dur: 240, xp: 120, desc: 'マウスピースでもOK。お手本→いち・に・さん・はい→4拍', kind: 'phrase', voice: 'v_long',
+    cfg: { bpm: 60, reps: 2, phrases: [
+      { title: 'B♭3 をツボの真ん中で', notes: [[58, 4]] },
+      { title: 'F3 をまっすぐ', notes: [[53, 4]] },
+      { title: 'B♭2 で下までしっかり', notes: [[46, 4]] },
+      { title: '切り替え B♭3→F3→B♭2→F3', notes: [[58, 2], [53, 2], [46, 2], [53, 2]] },
+    ] } },
+  { id: 'A3', name: 'アタック', icon: 'T', dur: 180, xp: 120, desc: '出た瞬間に音程を決める。拍・立ち上がり・音程で判定', kind: 'phrase', voice: 'v_attack',
+    cfg: { bpm: 80, reps: 2, attack: true, phrases: [
+      { title: 'B♭3 ティ×4', notes: [[58, 1], [58, 1], [58, 1], [58, 1]] },
+      { title: 'F3 ティ×4', notes: [[53, 1], [53, 1], [53, 1], [53, 1]] },
+      { title: 'C4 ティ×4', notes: [[60, 1], [60, 1], [60, 1], [60, 1]] },
+      { title: 'G3 ティ×4', notes: [[55, 1], [55, 1], [55, 1], [55, 1]] },
+    ] } },
+  { id: 'A4', name: 'スライド', icon: '⇄', dur: 180, xp: 90, desc: 'B♭↔G、F↔C。Gは4番を遠め、B♭は沈まない', kind: 'phrase', voice: 'v_slide',
+    cfg: { bpm: 60, reps: 2, mode: 'slide', phrases: [
+      { title: 'B♭3 ↔ G3（1番↔4番）', notes: [[58, 2], [55, 2], [58, 2], [55, 2]], focus: [1, 3] },
+      { title: 'F3 ↔ C3（1番↔6番）', notes: [[53, 2], [48, 2], [53, 2], [48, 2]] },
+    ] } },
+  { id: 'C1', name: '癖の矯正', icon: '⚒', dur: 180, xp: 120, desc: 'B♭のベンド＋最近の傾向から選んだ癖の矯正メニュー', kind: 'phrase', voice: 'v_long',
+    cfg: { bpm: 60, reps: 2, mode: 'long', phrases: [] } },
+  { id: 'B1', name: '苦手フレーズ', icon: '☠', dur: 180, xp: 150, boss: true, desc: 'F連打→最後のG、B♭↔G往復、E♭→F。ボスのHPを削れ', kind: 'phrase', voice: 'v_boss',
+    cfg: { bpm: 80, reps: 2, boss: true, mode: 'lock', hp: 500, phrases: [
+      { title: 'F の8分×4 → 最後の G', notes: [[53, .5], [53, .5], [53, .5], [53, .5], [55, 2]], focus: [4] },
+      { title: 'B♭↔G 8分で往復 → B♭', notes: [[58, .5], [55, .5], [58, .5], [55, .5], [58, 2]], focus: [1, 3, 4] },
+      { title: 'E♭4 → F4（口の切り替え）', notes: [[63, 1], [65, 1], [63, 1], [65, 1]], focus: [1, 3] },
+      { title: 'F の8分×4 → G → B♭', notes: [[53, .5], [53, .5], [53, .5], [53, .5], [55, 1], [58, 1]], focus: [4, 5] },
+    ] } },
+];
+
+// ---------- storage ----------
+const KEY = 'tb15dojo';
+let S = { xp: 0, history: {}, a4: 442, offset: 0, voice: true };
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const dkey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const today = () => dkey(new Date());
+const dayRec = () => (S.history[today()] = S.history[today()] || { stages: {}, xp: 0 });
+const level = xp => Math.floor(Math.sqrt(xp / 120)) + 1;
+const lvFloor = lv => (lv - 1) * (lv - 1) * 120;
+function streak() {
+  let n = 0; const d = new Date(); const done = k => S.history[k] && Object.keys(S.history[k].stages).length >= 2;
+  if (!done(today())) d.setDate(d.getDate() - 1);
+  while (done(dkey(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+function renderTop() {
+  const lv = level(S.xp), lo = lvFloor(lv), hi = lvFloor(lv + 1);
+  $('#lv').textContent = lv; $('#xp').textContent = S.xp; $('#streak').textContent = streak();
+  $('#xpfill').style.width = Math.round((S.xp - lo) / (hi - lo) * 100) + '%';
+}
+
+// ---------- audio ----------
+let AC = null;
+function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
+function tone(f, t0, dur, type = 'sine', gain = .18) {
+  const c = ac(), o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.value = f; o.connect(g); g.connect(c.destination);
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + .01); g.gain.exponentialRampToValueAtTime(.001, t0 + dur); o.start(t0); o.stop(t0 + dur + .05);
+}
+function brass(midi, t0, dur) { // trombone-ish reference voice
+  const c = ac(); const f = S.a4 * Math.pow(2, (midi - 69) / 12);
+  const o = c.createOscillator(), o2 = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
+  o.type = 'sawtooth'; o.frequency.value = f; o2.type = 'sine'; o2.frequency.value = f;
+  lp.type = 'lowpass'; lp.frequency.setValueAtTime(400, t0); lp.frequency.linearRampToValueAtTime(1400, t0 + .08); lp.Q.value = 1.5;
+  o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(c.destination);
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.16, t0 + .04); g.gain.setValueAtTime(.14, t0 + Math.max(.05, dur - .06)); g.gain.linearRampToValueAtTime(0, t0 + dur);
+  o.start(t0); o2.start(t0); o.stop(t0 + dur + .02); o2.stop(t0 + dur + .02);
+}
+// ---------- teacher reference (cut from lesson recordings) ----------
+const REF = { clips: {}, loading: null };
+function loadRef() {
+  if (REF.loading || !window.TEACHER_REF) return REF.loading; const c = ac();
+  REF.loading = Promise.all(Object.entries(window.TEACHER_REF).map(([k, m]) => {
+    if (!m.b64) return null; const bin = atob(m.b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return c.decodeAudioData(u8.buffer).then(buf => { REF.clips[k] = { buf, m }; }).catch(() => {});
+  }));
+  return REF.loading;
+}
+function refMeta(midi, sec) {
+  const T = window.TEACHER_REF || {}; const want = sec >= 1.2 ? ['long', 'attack'] : ['attack', 'long'];
+  for (const d of [0, 1, -1, 2, -2]) for (const k of want) { const m = T[(midi + d) + '_' + k]; if (m) return { key: (midi + d) + '_' + k, m, shift: -d }; }
+  return null;
+}
+function refNote(midi, t0, dur) {
+  const r = S.teacher === true ? refMeta(midi, dur) : null; const clip = r && REF.clips[r.key];
+  if (!clip) return brass(midi, t0, dur);
+  const c = ac(), m = clip.m, rate = Math.pow(2, r.shift / 12) * Math.pow(2, -m.cents / 1200) * (S.a4 / 442);
+  const src = c.createBufferSource(), g = c.createGain(); src.buffer = clip.buf; src.playbackRate.value = rate; src.connect(g); g.connect(c.destination);
+  let st = t0 - m.onset / rate, off = 0; if (st < c.currentTime) { off = (c.currentTime - st) * rate; st = c.currentTime; }
+  const natural = (m.dur - m.onset) / rate;
+  if (dur > natural - 0.15 && m.loopEnd > m.loopStart + 0.2) { src.loop = true; src.loopStart = m.loopStart; src.loopEnd = m.loopEnd; }
+  const end = t0 + dur; g.gain.setValueAtTime(1, st); g.gain.setValueAtTime(1, Math.max(st, end - 0.07)); g.gain.linearRampToValueAtTime(0, end);
+  src.start(st, off); src.stop(end + 0.02);
+}
+const SFX = {
+  click(acc, soft) { const t = ac().currentTime; tone(acc ? 1500 : 1000, t, .04, 'square', soft ? .03 : acc ? .1 : .06); },
+  judge(j) { const t = ac().currentTime;
+    if (j === 'P') [880, 1109, 1319, 1760].forEach((f, i) => tone(f, t + i * .045, .2, 'triangle', .13));
+    else if (j === 'G') [784, 988].forEach((f, i) => tone(f, t + i * .06, .18, 'triangle', .11));
+    else if (j === 'O') tone(660, t, .14, 'triangle', .09); else { tone(180, t, .25, 'sawtooth', .07); tone(140, t + .08, .25, 'sawtooth', .06); } },
+  fanfare() { const t = ac().currentTime; [[523, 0], [659, .12], [784, .24], [1047, .36], [784, .6], [1047, .72], [1319, .9]].forEach(([f, d]) => tone(f, t + d, .35, 'triangle', .15)); [1047, 1319, 1568].forEach(f => tone(f, t + 1.1, .9, 'sine', .09)); },
+  levelup() { const t = ac().currentTime; for (let i = 0; i < 10; i++) tone(440 * Math.pow(2, i / 6), t + i * .06, .3, 'triangle', .11); },
+  fever() { const t = ac().currentTime; [523, 784, 1047, 1568].forEach((f, i) => tone(f, t + i * .05, .25, 'square', .06)); },
+  hit() { const t = ac().currentTime; tone(110, t, .15, 'square', .08); tone(70, t + .03, .2, 'sine', .15); },
+};
+
+// ---------- mic + pitch ----------
+let analyser = null, buf = null, sr = 44100, micOn = false;
+async function startMic() {
+  if (micOn) return true;
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const c = ac(); sr = c.sampleRate; const src = c.createMediaStreamSource(st);
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 60;
+    analyser = c.createAnalyser(); analyser.fftSize = 4096; analyser.smoothingTimeConstant = 0; src.connect(hp); hp.connect(analyser);
+    buf = new Float32Array(analyser.fftSize); micOn = true; $('#mic').classList.add('on'); $('#mic span').textContent = 'マイク ON';
+    return true;
+  } catch (e) { $('#mic span').textContent = 'マイク不可'; toast('マイクが使えません。Chrome/Safariで開き、マイクを許可してください。'); return false; }
+}
+function detect() {
+  if (!analyser) return null;
+  analyser.getFloatTimeDomainData(buf);
+  let rms = 0; for (let i = 0; i < buf.length; i++) rms += buf[i] * buf[i]; rms = Math.sqrt(rms / buf.length);
+  if (rms < 0.004) return { rms, f0: 0 };
+  const n = buf.length, minLag = Math.floor(sr / 700), maxLag = Math.floor(sr / 50); const nsdf = new Float32Array(maxLag + 2);
+  for (let lag = minLag; lag <= maxLag; lag++) { let a = 0, m = 0; for (let i = 0; i < n - lag; i++) { a += buf[i] * buf[i + lag]; m += buf[i] * buf[i] + buf[i + lag] * buf[i + lag]; } nsdf[lag] = m ? 2 * a / m : 0; }
+  let peakLag = -1, peakVal = 0, inPeak = false, lm = 0, ll = -1;
+  for (let lag = minLag; lag <= maxLag; lag++) { const v = nsdf[lag];
+    if (v > 0 && !inPeak) { inPeak = true; lm = v; ll = lag; }
+    else if (inPeak) { if (v > lm) { lm = v; ll = lag; } if (v <= 0) { inPeak = false; if (lm > 0.5 && (peakLag < 0 || lm > peakVal * 1.1)) { peakVal = lm; peakLag = ll; } if (lm > 0.8) break; } } }
+  if (peakLag < 0 || peakVal < 0.5) return { rms, f0: 0 };
+  const a = nsdf[peakLag - 1] || 0, b = nsdf[peakLag], c2 = nsdf[peakLag + 1] || 0; const sh = (a - c2) / (2 * (a - 2 * b + c2) || 1);
+  const f0 = sr / (peakLag + (isFinite(sh) ? sh : 0)); const midiF = 69 + 12 * Math.log2(f0 / S.a4);
+  return { rms, f0, midiF, midi: Math.round(midiF) };
+}
+const centsTo = (d, target) => { const c = (d.midiF - target) * 100 - S.offset; return ((c + 600) % 1200 + 1200) % 1200 - 600; };
+
+// ---------- fx ----------
+let fxCanvas = null, parts = [];
+function burst(x, y, color, n = 40, power = 1) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: (Math.random() - .5) * 11 * power, vy: (Math.random() - 1.05) * 9 * power, life: 1, color, r: 2 + Math.random() * 4, star: Math.random() < .3 }); }
+function fxLoop() {
+  if (fxCanvas && fxCanvas.isConnected) {
+    const ctx = fxCanvas.getContext('2d'); const W = fxCanvas.width = fxCanvas.clientWidth, H = fxCanvas.height = fxCanvas.clientHeight; ctx.clearRect(0, 0, W, H);
+    parts = parts.filter(p => p.life > 0);
+    for (const p of parts) { p.x += p.vx; p.y += p.vy; p.vy += .25; p.life -= .018; ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color;
+      if (p.star) { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.life * 6); ctx.fillRect(-p.r, -p.r / 3, p.r * 2, p.r / 1.5); ctx.fillRect(-p.r / 3, -p.r, p.r / 1.5, p.r * 2); ctx.restore(); }
+      else { ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.28); ctx.fill(); } }
+    ctx.globalAlpha = 1;
+  } else parts = [];
+  requestAnimationFrame(fxLoop);
+}
+requestAnimationFrame(fxLoop);
+let toastT = null;
+function toast(msg) { let t = $('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); } t.textContent = msg; clearTimeout(toastT); toastT = setTimeout(() => t.remove(), 4000); }
+
+// ---------- buddy (cheer character) ----------
+const MOUTH = { happy: 'M30 55 Q40 66 50 55', wow: 'M35 56 Q40 66 45 56 Q40 50 35 56', sad: 'M31 61 Q40 52 49 61', calm: 'M33 58 Q40 61 47 58', fire: 'M28 54 Q40 70 52 54 Z' };
+function buddySVG() {
+  return `<svg viewBox="0 0 80 80" aria-hidden="true"><defs><radialGradient id="bg1" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#e09400"/></radialGradient></defs>
+  <path d="M14 26 L46 18" stroke="#c98a10" stroke-width="3" stroke-linecap="round"/><path d="M44 20 L58 8 Q66 2 70 10 Q73 19 63 22 L48 25 Z" fill="#ffc94d" stroke="#c98a10" stroke-width="1.5"/>
+  <ellipse cx="40" cy="48" rx="27" ry="25" fill="url(#bg1)"/><circle cx="25" cy="54" r="4" fill="#ff8a8a" opacity=".55"/><circle cx="55" cy="54" r="4" fill="#ff8a8a" opacity=".55"/>
+  <ellipse class="eye" cx="31" cy="44" rx="3.6" ry="5" fill="#2a1a00"/><ellipse class="eye" cx="49" cy="44" rx="3.6" ry="5" fill="#2a1a00"/><circle cx="32.3" cy="42" r="1.3" fill="#fff"/><circle cx="50.3" cy="42" r="1.3" fill="#fff"/>
+  <path id="mouth" d="${MOUTH.happy}" fill="#7a1f1f" stroke="#2a1a00" stroke-width="2" stroke-linecap="round"/>
+  <path d="M14 58 Q6 50 10 42" stroke="#e09400" stroke-width="5" fill="none" stroke-linecap="round" class="arm"/><path d="M66 58 Q74 50 70 42" stroke="#e09400" stroke-width="5" fill="none" stroke-linecap="round" class="arm"/></svg>`;
+}
+let bubbleT = 0;
+function buddy(mood, text, force) {
+  const b = $('#buddy'); if (!b) return; const now = performance.now();
+  if (!force && now - bubbleT < 1300 && mood !== 'fire') return; bubbleT = now;
+  const m = b.querySelector('#mouth'); if (m) m.setAttribute('d', MOUTH[mood] || MOUTH.happy);
+  b.className = 'buddy ' + (mood === 'happy' || mood === 'fire' || mood === 'wow' ? 'jump' : mood === 'sad' ? 'sad' : '');
+  void b.offsetWidth; if (text) b.querySelector('.bubble').textContent = text;
+}
+const LINES = {
+  start: ['いっくよー！', '今日もツボ狙ってこ！', '息からね、息から！', '15分だけ、全力で！'],
+  P: ['ど真ん中！', 'ツボ入った〜！', 'その音、抜けてる！', '完璧すぎん？', 'カチッと決まった！'],
+  G: ['いいねいいね', 'あとちょい！', 'ナイス！'],
+  O: ['おしい！', 'もうひと息！'],
+  M: ['ドンマイ、息から！', '次いこ次！', '力まない力まない', '音、出てた？'],
+  high: ['ちょい高い！', '上ずってるよ〜'], low: ['ちょい低い！支えて！', '沈んでる〜'],
+  Ghigh: ['G高い！4番もうちょい遠く！', 'Gはね、4番を指1本ぶん外'], Bblow: ['B♭沈んでる！唇の支え！', '開放のB♭、下がりがち！'],
+  late: ['遅れた！', 'もうちょい前！'], early: ['はやい！落ち着いて'], slowlock: ['出だしで決めて！', '立ち上がり、もっとスパッと'],
+};
+
+// ---------- staff ----------
+const X0 = 74, PPB = 54, staffY = d => 108 - (d - 18) * 6;
+function geom(m) { const pc = m % 12; return { d: [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6][pc] + 7 * (Math.floor(m / 12) - 1), flat: [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0][pc] === 1 }; }
+function staffSVG(ph) {
+  const notes = ph.notes; let t = 0; const xs = notes.map(n => { const x = X0 + t * PPB + 14; t += n[1]; return x; });
+  const total = t, W = X0 + Math.ceil(total) * PPB + 20; let s = '';
+  for (let k = 0; k < 5; k++) { const y = 60 + k * 12; s += `<line x1="8" x2="${W - 8}" y1="${y}" y2="${y}" stroke="var(--staff)" stroke-width="1.2"/>`; }
+  s += `<path d="M22 72 C20 58 40 56 42 70 C44 86 30 98 14 104" stroke="var(--fg)" stroke-width="3.2" fill="none" stroke-linecap="round"/><circle cx="23" cy="72" r="4.5" fill="var(--fg)"/><circle cx="50" cy="66" r="2.6" fill="var(--fg)"/><circle cx="50" cy="78" r="2.6" fill="var(--fg)"/>`;
+  for (let b = 4; b < total; b += 4) { const x = X0 + b * PPB + 2; s += `<line x1="${x}" x2="${x}" y1="60" y2="108" stroke="var(--staff)" stroke-width="1.2"/>`; }
+  s += `<line x1="${W - 8}" x2="${W - 8}" y1="60" y2="108" stroke="var(--staff)" stroke-width="1.2"/><line x1="${W - 12}" x2="${W - 12}" y1="60" y2="108" stroke="var(--staff)" stroke-width="1.2"/>`;
+  s += `<rect id="cur" x="${X0}" y="44" width="4" height="80" rx="2" fill="var(--accent2)" opacity="0"/>`;
+  notes.forEach((n, i) => {
+    const [m, beats] = n, g = geom(m), x = xs[i], y = staffY(g.d), hollow = beats >= 2, up = g.d < 22, focus = (ph.focus || []).includes(i);
+    if (focus) s += `<circle cx="${x}" cy="${y}" r="15" fill="var(--warn)" opacity=".18"/><text x="${x}" y="${up ? y + 28 : y - 22}" text-anchor="middle" font-size="11" fill="var(--warn)">★</text>`;
+    for (let k = 28; k <= g.d; k += 2) s += `<line x1="${x - 11}" x2="${x + 11}" y1="${staffY(k)}" y2="${staffY(k)}" stroke="var(--staff)" stroke-width="1.2"/>`;
+    for (let k = 16; k >= g.d; k -= 2) s += `<line x1="${x - 11}" x2="${x + 11}" y1="${staffY(k)}" y2="${staffY(k)}" stroke="var(--staff)" stroke-width="1.2"/>`;
+    if (g.flat) s += `<text x="${x - 19}" y="${y + 5}" font-size="17" fill="var(--fg)">♭</text>`;
+    if (beats < 4) { const sx = up ? x + 6.2 : x - 6.2, ey = up ? y - 34 : y + 34; s += `<line x1="${sx}" x2="${sx}" y1="${y}" y2="${ey}" stroke="var(--fg)" stroke-width="1.6"/>`;
+      const tri = Math.abs(beats * 3 - Math.round(beats * 3)) < .01 && Math.abs(beats - Math.round(beats * 2) / 2) > .01, base = tri ? beats * 1.5 : beats, flags = base <= .26 ? 2 : base < 1 && !(Math.abs(base - .75) < .01) ? 1 : Math.abs(base - .75) < .01 ? 1 : 0;
+      for (let f = 0; f < flags; f++) { const fy = up ? ey + f * 8 : ey - f * 8; s += up ? `<path d="M${sx} ${fy} q 10 8 7 20" stroke="var(--fg)" stroke-width="2" fill="none"/>` : `<path d="M${sx} ${fy} q 10 -8 7 -20" stroke="var(--fg)" stroke-width="2" fill="none"/>`; }
+      if (tri) s += `<text x="${x}" y="${up ? ey - 6 : ey + 16}" text-anchor="middle" font-size="12" font-style="italic" font-weight="700" fill="var(--accent2)">3</text>`; }
+    if ([1.5, 3, .75].some(v => Math.abs(beats - v) < .01)) s += `<circle cx="${x + 12}" cy="${y - (g.d % 2 ? 0 : 3)}" r="2.4" fill="var(--fg)"/>`;
+    s += `<ellipse id="nh-${i}" data-hollow="${hollow ? 1 : 0}" cx="${x}" cy="${y}" rx="7" ry="5.2" fill="${hollow ? 'none' : 'var(--fg)'}" stroke="var(--fg)" stroke-width="${hollow ? 2.2 : 1}"/>`;
+    s += `<text id="nl-${i}" x="${x}" y="${Math.min(y, 60) - (up ? 44 : 10)}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--mute)"></text>`;
+    s += `<text x="${x}" y="142" text-anchor="middle" font-size="12" fill="var(--mute)">${POS[m] || ''}</text>`;
+  });
+  s += `<text x="10" y="142" font-size="10" fill="var(--mute)" letter-spacing="1">POS</text>`;
+  return { svg: `<svg class="staffsvg" viewBox="0 0 ${W} 150" style="max-width:${W * 1.6}px">${s}</svg>`, xs, total };
+}
+function colorNote(i, j, label) {
+  const col = { P: 'var(--perfect)', G: 'var(--good)', O: 'var(--warn)', M: 'var(--bad)' }[j];
+  const e = $('#nh-' + i); if (e) { if (e.dataset.hollow === '1') e.setAttribute('stroke', col); else { e.setAttribute('fill', col); e.setAttribute('stroke', col); } e.classList.remove('pop'); void e.getBBox; e.classList.add('pop'); }
+  const l = $('#nl-' + i); if (l) { l.textContent = label; l.setAttribute('fill', col); }
+}
+function resetNotes(n) { for (let i = 0; i < n; i++) { const e = $('#nh-' + i); if (e) { if (e.dataset.hollow === '1') e.setAttribute('stroke', 'var(--fg)'); else { e.setAttribute('fill', 'var(--fg)'); e.setAttribute('stroke', 'var(--fg)'); } } const l = $('#nl-' + i); if (l) l.textContent = ''; } }
+
+// ---------- home ----------
+const view = $('#view');
+const STARS = r => r === 'S' ? '★★★' : r === 'A' ? '★★☆' : r === 'B' ? '★☆☆' : r ? '☆☆☆' : '';
+function home() {
+  stopStage();
+  const rec = dayRec(); const doneN = STAGES.filter(s => rec.stages[s.id]).length; const st = streak();
+  const qi = (new Date().getDate() + doneN) % QUOTES.length, q = QUOTES[qi];
+  const greet = doneN === STAGES.length ? '今日はコンプリート！明日も来てね' : st >= 3 ? `連続${st}日！この調子！` : doneN ? '続きいこ！あと' + (STAGES.length - doneN) + 'ステージ' : pick(LINES.start);
+  view.innerHTML = `<div class="stage">
+    <div id="buddy" class="buddy jump">${buddySVG()}<div class="bubble">${greet}</div></div>
+    <div class="quote"><div class="who">今日のヒント · ${q[1]}</div><div class="q">「${q[0]}」</div><div class="qe">${q[2]}</div></div>
+    <div class="map">${STAGES.map((s, i) => { const r = rec.stages[s.id]; return `<button class="node ${r ? 'done' : ''} ${s.boss ? 'boss' : ''}" data-i="${i}"><span class="orb">${s.icon}</span><span class="nm">${s.boss ? 'BOSS' : 'STAGE ' + (i + 1)}</span><span class="nn">${s.name}</span><span class="st">${r ? STARS(r.rank) : Math.round(s.dur / 60) + '分'}</span></button>`; }).join('<i class="link"></i>')}</div>
+    <div class="row" style="justify-content:center"><button class="btn big" id="go">${doneN === 0 ? '▶ 今日の15分を始める' : doneN === STAGES.length ? '▶ もう一周' : '▶ 続きから'}</button>${doneN ? '<button class="btn ghost big" id="rep">🎤 今日の採点</button>' : ''}</div>
+    <div class="row" style="justify-content:space-between;align-items:flex-end">
+      <div class="settings"><label>A4 <input id="a4" type="number" value="${S.a4}" min="430" max="450"> Hz</label><label>ミュート補正 <input id="off" type="number" value="${S.offset}" step="1"> セント</label><label>拍の補正 <input id="tcal" type="number" value="${+S.tcal || 0}" step="10"> ms</label><span id="olat">${AC ? '音の出力遅延 ' + Math.round(outLat()) + 'ms（自動で補正）' : ''}</span><label><input id="voice" type="checkbox" ${S.voice ? 'checked' : ''}> 声で案内</label><span id="vstat"></span></div>
+      <div><div class="hist" id="hist"></div><div class="histl">過去14日のXP</div></div>
+    </div></div>`;
+  const go = async i => { if (await startMic()) runStage(i); };
+  $('#go').onclick = () => { const nx = STAGES.findIndex(s => !rec.stages[s.id]); go(nx < 0 ? 0 : nx); };
+  view.querySelectorAll('.node').forEach(b => b.onclick = () => go(+b.dataset.i));
+  if ($('#rep')) $('#rep').onclick = report;
+  $('#a4').onchange = e => { S.a4 = +e.target.value || 442; save(); };
+  $('#off').onchange = e => { S.offset = +e.target.value || 0; save(); }; $('#tcal').onchange = e => { S.tcal = +e.target.value || 0; save(); };
+  $('#voice').onchange = e => { S.voice = e.target.checked; save(); }; 
+  { const a = new Audio('voices/go.wav'); a.oncanplaythrough = () => { $('#vstat').textContent = '案内の声：音声ファイル'; }; a.onerror = () => { $('#vstat').textContent = '案内の声：端末の読み上げ'; }; a.load(); }
+  const h = $('#hist'); const d = new Date(); d.setDate(d.getDate() - 13);
+  for (let i = 0; i < 14; i++) { const k = dkey(d); const x = S.history[k] ? S.history[k].xp : 0; const el = document.createElement('i'); el.style.height = Math.max(4, Math.min(56, x / 9)) + 'px'; if (x) el.className = 'on'; el.title = k + ' ' + x + 'XP'; h.appendChild(el); d.setDate(d.getDate() + 1); }
+  renderTop();
+}
+
+// ---------- shared stage state ----------
+let raf = 0, timers = [], stageIdx = -1, combo = 0, maxCombo = 0, score = 0, judges, stats, fever = false, E = null;
+function later(fn, ms) { const t = setTimeout(fn, ms); timers.push(t); return t; }
+function stopStage() { cancelAnimationFrame(raf); timers.forEach(clearTimeout); timers = []; E = null; fever = false; try { speechSynthesis.cancel(); } catch (e) {} }
+const JW = { P: ['ど真ん中!', 'PERFECT'], G: ['いいね', 'GREAT'], O: ['おしい', 'OK'], M: ['ミス', 'MISS'] };
+function showJudge(j, detail) {
+  const el = $('#judge'); if (!el) return;
+  el.className = 'judge ' + j; el.innerHTML = `<b>${JW[j][0]}</b>${detail ? `<em>${detail}</em>` : ''}<small>${JW[j][1]}</small>`; void el.offsetWidth; el.classList.add('show');
+  later(() => el.classList.remove('show'), 1200);
+  SFX.judge(j); judges[j]++;
+  if (j === 'M') { combo = 0; if (fever) { fever = false; $('.arena').classList.remove('fever'); } $('.arena').classList.remove('shake'); void $('.arena').offsetWidth; $('.arena').classList.add('shake'); }
+  else combo++;
+  maxCombo = Math.max(maxCombo, combo);
+  if (combo === 10 && !fever) { fever = true; $('.arena').classList.add('fever'); SFX.fever(); buddy('fire', 'FEVER！！スコア2倍！', true); }
+  else if (combo === 5) buddy('wow', '5コンボ！ノってきた！', true);
+  else if (combo === 20) buddy('fire', '20コンボ…師匠レベル', true);
+  score += Math.round({ P: 100, G: 70, O: 30, M: 0 }[j] * (1 + Math.min(combo, 30) * 0.03) * (fever ? 2 : 1));
+  $('#score').textContent = score.toLocaleString();
+  const c = $('#combo'); if (c) c.innerHTML = combo > 1 ? `${combo}<small>COMBO</small>` : '';
+  if (fxCanvas && j !== 'M') burst(fxCanvas.clientWidth * .5, fxCanvas.clientHeight * .45, j === 'P' ? '#ffd54a' : j === 'G' ? '#4ade80' : '#fbbf24', j === 'P' ? (fever ? 90 : 55) : 22, fever ? 1.3 : 1);
+}
+const judgeCents = c => { const a = Math.abs(c); return a <= 10 ? 'P' : a <= 25 ? 'G' : a <= 45 ? 'O' : 'M'; };
+function arenaShell(s, inner, hint) {
+  view.innerHTML = `<div class="stage">
+    <div class="stagehead"><h2><span class="tag ${s.boss ? 'boss' : ''}">${s.boss ? 'BOSS' : 'STAGE ' + (stageIdx + 1)}</span> ${s.name}</h2><div class="sc"><span class="k">SCORE</span> <b id="score">0</b></div><div class="time" id="time">${Math.floor(s.dur / 60)}:00</div><button class="btn ghost" id="quit">やめる</button></div>
+    <div class="arena"><canvas class="fx"></canvas><div class="combo" id="combo"></div><div class="judge" id="judge"></div>${inner}</div>
+    <div id="buddy" class="buddy">${buddySVG()}<div class="bubble">${hint}</div></div></div>`;
+  $('#quit').onclick = home; fxCanvas = view.querySelector('canvas.fx');
+}
+function meterHTML() { return `<div class="meter"><div class="scale"><div class="zone"><i class="ok"></i><i class="great"></i><i class="perfect"></i></div><div class="needle off" id="needle"></div></div><div class="lbl"><span>低い −50</span><span>0</span><span>+50 高い</span></div></div>`; }
+function setNeedle(c, on) { const n = $('#needle'); if (!n) return; n.classList.toggle('off', !on); if (on) { n.style.left = (50 + Math.max(-50, Math.min(50, c))) + '%'; n.style.background = Math.abs(c) <= 10 ? 'var(--perfect)' : Math.abs(c) <= 25 ? 'var(--good)' : 'var(--fg)'; } }
+
+// ---------- daily phrase variations ----------
+const NN = m => midiName(m);
+const RH = { q: { n: '4分', d: [1, 1, 1, 1] }, e: { n: '8分', d: [.5, .5, .5, .5, 1, 1] }, dot: { n: '付点', d: [1.5, .5, 1.5, .5] }, syn: { n: 'シンコペーション', d: [.5, 1, .5, 1, 1] }, tri: { n: '3連', d: [1 / 3, 1 / 3, 1 / 3, 1, 1 / 3, 1 / 3, 1 / 3, 1] }, h: { n: '2分＋4分', d: [2, 1, 1] } };
+function rngFor(s) { const k = today() + s.id + ':' + (((S.roll || {})[today() + s.id]) || 0); let h = 1779033703; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 3432918353) >>> 0;
+  return () => { h += 0x6D2B79F5; let t = h; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const pickN = (r, a, n) => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b.slice(0, n); };
+const CORE = { A2: [0, 3], A3: [0, 3], A4: [0, 1], B1: [0, 1] }; // 毎日同じ「定点」フレーズ（推移はこれだけで測る）
+const GEN = {
+  A2: r => { const fl = ['をツボの真ん中で', 'をまっすぐ', 'を最後まで圧をかけて', 'を太く、明るく'];
+    const singles = pickN(r, [58, 53, 46, 62, 60, 51, 55, 56], 3).map(m => ({ title: NN(m) + ' ' + fl[Math.floor(r() * fl.length)], notes: [[m, 4]] }));
+    const sw = pickN(r, [[[58, 53, 46, 53], '切り替え B♭3→F3→B♭2→F3'], [[46, 50, 53, 58], 'B♭の分散和音 上り'], [[58, 62, 65, 62], 'B♭3→D4→F4→D4'], [[53, 55, 57, 58], 'F→G→A→B♭ ステップ'], [[60, 58, 55, 53], 'C4→B♭→G→F 下り']], 1)[0];
+    return singles.concat([{ title: sw[1], notes: sw[0].map(m => [m, 2]) }]); },
+  A3: r => { const notes = pickN(r, [58, 53, 60, 55, 62, 50, 63, 46], 3), rhs = ['q'].concat(pickN(r, ['e', 'dot', 'syn', 'tri', 'h'], 3));
+    const out = notes.map((m, k) => { const rh = RH[rhs[k]]; return { title: `${NN(m)} ${rh.n}でティ`, notes: rh.d.map(d => [m, d]) }; });
+    const arp = pickN(r, [[58, 62, 65, 62], [53, 58, 62, 58], [55, 58, 62, 58], [50, 53, 58, 53]], 1)[0], rh = RH[rhs[3]];
+    out.push({ title: `${arp.map(NN).join('→')} ${rh.n}で1音ずつティ`, notes: rh.d.map((d, k) => [arp[k % arp.length], d]) });
+    return out; },
+  A4: r => { const pairs = [[58, 55, 'B♭3↔G3（1↔4）', true], [53, 48, 'F3↔C3（1↔6）'], [56, 53, 'A♭3↔F3（3↔1）'], [62, 58, 'D4↔B♭3（4↔1）'], [57, 60, 'A3↔C4（2↔3）'], [51, 48, 'E♭3↔C3（3↔6）']];
+    const ps = [pairs[0]].concat(pickN(r, pairs.slice(1), r() < .5 ? 1 : 2));
+    const out = ps.map(([a, b, t, f]) => { const fast = r() < .4; const d = fast ? 1 : 2, n = fast ? 8 : 4; return { title: t + (fast ? ' 4分で速く' : ''), notes: Array.from({ length: n }, (_, k) => [k % 2 ? b : a, d]), focus: f ? Array.from({ length: n / 2 }, (_, k) => k * 2 + 1) : undefined }; });
+    if (out.length < 3 && r() < .6) out.push({ title: 'B♭メジャースケール 上り', notes: [46, 48, 50, 51, 53, 55, 57, 58].map(m => [m, 1]) });
+    return out; },
+  B1: r => { const pool = [
+      { title: 'F の8分×4 → 最後の G', notes: [[53, .5], [53, .5], [53, .5], [53, .5], [55, 2]], focus: [4] },
+      { title: 'B♭↔G 8分で往復 → B♭', notes: [[58, .5], [55, .5], [58, .5], [55, .5], [58, 2]], focus: [1, 3, 4] },
+      { title: 'E♭4 → F4（口の切り替え）', notes: [[63, 1], [65, 1], [63, 1], [65, 1]], focus: [1, 3] },
+      { title: 'F の8分×4 → G → B♭', notes: [[53, .5], [53, .5], [53, .5], [53, .5], [55, 1], [58, 1]], focus: [4, 5] },
+      { title: 'G→B♭→D4 跳躍', notes: [[55, 1], [58, 1], [62, 2]], focus: [0] },
+      { title: 'C4 8分×4 → B♭ → G', notes: [[60, .5], [60, .5], [60, .5], [60, .5], [58, 1], [55, 1]], focus: [5] },
+      { title: 'A♭→F→E♭ 3連 → F', notes: [[56, 1 / 3], [53, 1 / 3], [51, 1 / 3], [53, 1], [56, 1], [53, 1]], focus: [0, 4] },
+      { title: '付点で G→A→B♭→C', notes: [[55, 1.5], [57, .5], [58, 1.5], [60, .5]], focus: [0] },
+      { title: 'D4→E♭4→F4 上行', notes: [[62, 1], [63, 1], [65, 2]], focus: [1, 2] }];
+    const g = pool.filter(p => p.notes.some(n => n[0] === 55)); const first = g[Math.floor(r() * g.length)];
+    return [first].concat(pickN(r, pool.filter(p => p !== first), 3)); },
+};
+function rollStage(s) { S.roll = S.roll || {}; for (const k in S.roll) if (!k.startsWith(today())) delete S.roll[k]; S.roll[today() + s.id] = (S.roll[today() + s.id] || 0) + 1; save(); }
+
+// ---------- bend & habit correction ----------
+const BEND_STEPS = ['1〜2拍：B♭をまっすぐ', '3〜4拍：唇と息で下げる（−30¢まで）', '5〜6拍：真ん中を越えて +10¢ まで上げる', '7〜8拍：真ん中に戻してキープ'];
+function analyzeBend(r, len) {
+  const k = len / 8, pts = r.trace.filter(p => p.c !== null), seg = (a, b) => pts.filter(p => p.b >= a * k && p.b <= b * k).map(p => p.c);
+  const lo = seg(2, 4.3), hi = seg(4, 6.3), en = seg(6.3, 7.6);
+  if (lo.length < 4 || hi.length < 4 || en.length < 4) return null;
+  const low = Math.min(...lo), top = Math.max(...hi), end = mean(en);
+  return { bend: true, low, top, end, med: end, levels: [top >= 10 ? 0 : top >= 3 ? 1 : 2, low <= -30 ? 0 : low <= -15 ? 1 : 2, Math.abs(end) <= 5 ? 0 : Math.abs(end) <= 12 ? 1 : 2] };
+}
+function adviseBend(v) {
+  if (!v) return { lvl: 3, verdict: '音が続かない', num: '', action: '8拍、息を切らずに伸ばし続けよう', sub: '', chips: [{ lvl: 3, text: '途中で途切れた' }] };
+  const items = [
+    { lvl: v.levels[0], pri: 3, verdict: v.top < 3 ? '上に抜けない' : 'もう少し上へ', num: '上限 ' + sgn(v.top) + '¢', action: '息のスピードを上げ、舌を「ティー」に。押し付けずに上へ', ok: '上限 ' + sgn(v.top) + '¢' },
+    { lvl: v.levels[2], pri: 2, verdict: v.end < 0 ? '戻りが低い' : '戻りが高い', num: '戻り ' + sgn(v.end) + '¢', action: v.end < 0 ? '上げたときの口の形を少し残したまま真ん中へ。ここがB♭の正しい場所' : '息だけ少し緩めて真ん中へ', ok: '戻り ' + sgn(v.end) + '¢' },
+    { lvl: v.levels[1], pri: 1, verdict: '下げが浅い', num: '下限 ' + sgn(v.low) + '¢', action: 'あごを少し下げ「トー」で、もっと下まで動かす', ok: '下限 ' + sgn(v.low) + '¢' }];
+  const chips = items.map(x => ({ lvl: x.lvl, text: x.ok })), bad = items.filter(x => x.lvl > 0).sort((a, b) => b.lvl - a.lvl || b.pri - a.pri), okList = items.filter(x => x.lvl === 0).map(x => '✓ ' + x.ok);
+  if (!bad.length) return { lvl: 0, verdict: 'ツボを掴んだ！', num: '', action: '戻った場所がB♭の真ん中。ふだんのB♭もここで吹く', sub: okList.join('　'), chips };
+  const t = bad[0]; return { lvl: t.lvl, verdict: t.verdict, num: t.num, action: t.action, sub: bad.slice(1).map(x => '△ ' + x.verdict + ' ' + x.num).concat(okList).join('　'), chips };
+}
+const HABITS = {
+  G: { why: 'Gが高い', ph: { title: 'G3 を高くしない（4番を指1本遠く）', mode: 'long', notes: [[58, 2], [55, 4], [58, 2]], focus: [1] } },
+  lock: { why: '出だしの音程が決まるまで遅い', ph: { title: '出た瞬間に決める：B♭3→D4→F4→D4 ティ', mode: 'attack', notes: [[58, 1], [62, 1], [65, 1], [62, 1]] } },
+  drift: { why: 'ロングトーンの後半で沈む', ph: { title: 'F3 を8拍、最後の2拍で圧を足す', mode: 'long', notes: [[53, 8]] } },
+  late: { why: '出だしが拍より遅れる', ph: { title: '息を先に。拍の頭で舌を離すだけ：F3 ティ×4', mode: 'attack', notes: [[53, 1], [53, 1], [53, 1], [53, 1]] } },
+  early: { why: '拍より前に出る（走る）', ph: { title: '拍を待ってから：F3 ティ×4', mode: 'attack', notes: [[53, 1], [53, 1], [53, 1], [53, 1]] } },
+};
+function habitPlan() {
+  const st = []; const d = new Date(); for (let k = 0; k < 7; k++) { const r = S.history[dkey(d)]; if (r && r.detail) for (const id of ['A2', 'A3', 'A4', 'B1']) st.push(...(((r.detail[id] || {}).stats) || []).filter(x => x.note && x.j !== 'M')); d.setDate(d.getDate() - 1); }
+  const g = st.filter(x => x.note % 12 === 7).map(x => x.cents), lk = st.map(x => x.lock).filter(okv), dr = st.map(x => x.drift).filter(okv), on = st.map(x => x.on).filter(okv);
+  const enough = st.length >= 30, avg = a => a.length ? mean(a) : null;
+  const sev = { G: g.length >= 6 ? (avg(g) - 4) : 5, lock: lk.length >= 8 ? (avg(lk) - 80) / 6 : 4, drift: dr.length >= 4 ? -(avg(dr)) - 4 : 3,
+    late: on.length >= 8 ? (avg(on) - 40) / 6 : -1, early: on.length >= 8 ? (-avg(on) - 40) / 6 : -1 };
+  const pick2 = Object.keys(sev).filter(k => sev[k] > 0).sort((a, b) => sev[b] - sev[a]).slice(0, 2);
+  while (pick2.length < 2) { const f = ['G', 'lock', 'drift'].find(k => !pick2.includes(k)); pick2.push(f); }
+  return { enough, keys: pick2 };
+}
+function runStage(i) {
+  stopStage(); stageIdx = i; combo = 0; maxCombo = 0; score = 0; judges = { P: 0, G: 0, O: 0, M: 0 }; stats = [];
+  const s = STAGES[i]; if (s.id === 'C1') { const hp = habitPlan(); s.cfg.phrases = [{ title: 'B♭3 ベンド：下げて→+10¢まで上げて→真ん中', mode: 'bend', notes: [[58, 8]] }].concat(hp.keys.map(k => ({ ...HABITS[k].ph, title: HABITS[k].ph.title + '（' + HABITS[k].why + (hp.enough ? '' : '・レッスン分析より') + '）' }))); }
+  if (GEN[s.id]) { const base = s.cfg.base || (s.cfg.base = s.cfg.phrases); const key = p => p.notes.map(n => n.join(':')).join('|');
+    const core = CORE[s.id].map(k => ({ ...base[k], core: true, title: '【定点】' + base[k].title })); const ck = new Set(core.map(key));
+    const daily = GEN[s.id](rngFor(s)).filter(p => !ck.has(key(p))).slice(0, 2).map(p => ({ ...p, core: false, title: '【日替わり】' + p.title }));
+    s.cfg.phrases = core.concat(daily); } const qi = Math.floor(Math.random() * QUOTES.length), q = QUOTES[qi];
+  const preview = s.kind === 'phrase' ? `<div class="plist">${s.cfg.phrases.map(p => `<div class="pv"><div class="pt">${p.title}</div>${staffSVG(p).svg}</div>`).join('')}</div>` : '';
+  view.innerHTML = `<div class="stage"><div class="stagehead"><h2><span class="tag ${s.boss ? 'boss' : ''}">${s.boss ? 'BOSS' : 'STAGE ' + (i + 1)}</span> ${s.name}</h2><button class="btn ghost" id="back">戻る</button></div>
+    <div class="quote"><div class="who">ヒント · ${q[1]}</div><div class="q">「${q[0]}」</div><div class="qe">${q[2]}</div></div>
+    <div class="arena intro">${s.boss ? bossSVG() : ''}<div class="hint big">${s.desc}</div>${preview}<div class="row" style="justify-content:center;gap:10px">${GEN[s.id] ? '<button class="btn ghost" id="reroll">🎲 別のメニューにする</button>' : ''}<button class="btn big" id="start">▶ スタート</button></div></div>
+    <div id="buddy" class="buddy jump">${buddySVG()}<div class="bubble">${s.boss ? 'ボス戦だ！★の音が弱点！' : pick(LINES.start)}</div></div></div>`;
+  $('#back').onclick = home; if ($('#reroll')) $('#reroll').onclick = () => { rollStage(s); runStage(i); };
+  $('#start').onclick = async () => { ac(); try { await loadRef(); } catch (e) {} if (s.kind === 'breath') stageBreath(s); else stagePhrase(s); };
+  TTS.say('q' + String(qi).padStart(2, '0'));
+}
+
+// ---------- A1 breathing ----------
+function stageBreath(s) {
+  arenaShell(s, `<div class="breath" id="breath">吸う</div><div class="pressure"><i id="pres"></i></div><div class="readout"><span>サイクル <b id="cyc">0</b></span><span>最後の4拍の圧 <b id="pv">—</b></span></div><canvas id="bcv" class="bcv" width="720" height="190"></canvas>${coachHTML('4拍吸って、細く長く。最後の4拍で圧を上げる')}<div class="lesson" id="lesson"></div>`, '吐いている間にヒントが流れるよ。聞きながら細く長く！');
+  const beat = 1, cycle = 20 * beat, t0 = performance.now(); let lastCyc = -1, exhale = [], tail = [], curve = [], prevCurve = null, phase = '', qi = Math.floor(Math.random() * QUOTES.length);
+  TTS.say('i_breath');
+  const tick = () => {
+    const t = (performance.now() - t0) / 1000, left = Math.max(0, s.dur - t); $('#time').textContent = Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0');
+    if (left <= 0) return finish();
+    const cyc = Math.floor(t / cycle), ph = (t % cycle) / beat, b = $('#breath'); const np = ph < 4 ? 'in' : ph < 16 ? 'out' : 'push';
+    if (ph < 4) { b.textContent = '吸う ' + (4 - Math.floor(ph)); b.style.transform = 'scale(' + (0.5 + ph / 4 * 0.5) + ')'; }
+    else { const e = ph - 4; b.textContent = (e >= 12 ? '圧を上げる ' : '吐く ') + (16 - Math.floor(e)); b.style.transform = 'scale(' + (1 - e / 16 * 0.5) + ')'; }
+    b.classList.toggle('push', np === 'push');
+    if (np !== phase) { phase = np; TTS.say(np);
+      if (np === 'out') { const k = (qi + cyc) % QUOTES.length, q = QUOTES[k]; $('#lesson').innerHTML = '「' + q[0] + '」<span>' + q[2] + '</span>'; later(() => TTS.say('q' + String(k).padStart(2, '0')), 900); } }
+    const d = detect(); const lvl = d ? Math.min(1, d.rms * 25) : 0; $('#pres').style.width = (lvl * 100) + '%';
+    if (ph >= 4) { exhale.push(lvl); curve.push([ph - 4, lvl]); if (ph >= 16) tail.push(lvl); drawBreath(curve, prevCurve); }
+    if (cyc !== lastCyc) {
+      if (lastCyc >= 0 && exhale.length) { const mean = exhale.reduce((a, c) => a + c, 0) / exhale.length, tm = tail.length ? tail.reduce((a, c) => a + c, 0) / tail.length : 0;
+        const j = tm > mean * 1.15 && mean > 0.05 ? 'P' : tm >= mean * 0.95 && mean > 0.03 ? 'G' : mean > 0.02 ? 'O' : 'M';
+        showJudge(j, j === 'P' ? '圧が上がった' : j === 'G' ? 'キープ' : j === 'O' ? '後半で抜けた' : '息が聞こえない'); $('#pv').textContent = (tm / (mean || 1)).toFixed(2) + '×';
+        buddy(j === 'M' ? 'sad' : 'happy', j === 'P' ? '最後まで圧！最高！' : j === 'O' ? '後半、息が抜けたよ〜' : j === 'M' ? 'マイクに息、聞こえてる？' : 'いい呼吸！');
+        stats.push({ ratio: tm / (mean || 1) }); setCoach(breathAdvice(j, tm / (mean || 1)), 'サイクル ' + (lastCyc + 1)); }
+      lastCyc = cyc; exhale = []; tail = []; if (curve.length > 20) prevCurve = curve; curve = []; $('#cyc').textContent = cyc; }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+}
+
+// ---------- phrase engine (A2–A4, BOSS) ----------
+function bossSVG() { return `<div class="bossbox"><svg viewBox="0 0 80 70" class="bossimg" id="bossimg"><path d="M10 50 Q6 18 40 12 Q74 18 70 50 Q68 64 40 64 Q12 64 10 50 Z" fill="#6d3bd6"/><path d="M22 30 L34 36 M58 30 L46 36" stroke="#fff" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="40" r="4" fill="#fff"/><circle cx="50" cy="40" r="4" fill="#fff"/><circle cx="31" cy="41" r="2" fill="#1b0b33"/><circle cx="51" cy="41" r="2" fill="#1b0b33"/><path d="M28 54 L33 50 L38 54 L43 50 L48 54 L52 50" stroke="#fff" stroke-width="2" fill="none"/><text x="36" y="28" font-size="16" fill="#ffd54a" font-weight="700">♭</text></svg><div class="hpwrap"><div class="hpname">ニガテ・フレーズ</div><div class="hp"><i id="hp"></i></div></div></div>`; }
+function stagePhrase(s) {
+  const c = s.cfg, beat = 60 / c.bpm;
+  arenaShell(s, `<div class="pcols"><div class="pleft">${c.boss ? bossSVG() : ''}<div class="ptitle" id="ptitle"></div><div class="staffwrap" id="staff"></div><div class="phase" id="phase">お手本</div>${meterHTML()}<div class="readout"><span>今 <b id="now">—</b></span><span>ずれ <b id="cen">—</b></span></div>${coachHTML()}</div><div class="pright"><div class="scope" id="scope"></div>${howtoHTML(c.attack ? 'attack' : c.mode || 'long')}</div></div>`, s.boss ? '★の音が弱点！ど真ん中で大ダメージ！' : 'お手本を聴いて、いち・に・さん・はい！');
+  E = { s, c, beat, mode: c.attack ? 'attack' : (c.mode || 'long'), baseMode: c.attack ? 'attack' : (c.mode || 'long'), t0: performance.now() / 1000 + 1.2, seg: null, pi: 0, rep: 0, res: [], lastBi: -1, prevRms: 0, hp: c.hp || 0, done: false, lay: null, starts: [] };
+  TTS.say(s.voice);
+  setPhrase(0); E.seg = makeSeg('ref', 0); enterSeg(E.seg);
+  raf = requestAnimationFrame(tickPhrase);
+}
+function setPhrase(pi) {
+  const p = E.c.phrases[pi]; E.mode = p.mode || E.baseMode; E.bstep = -1; E.lay = staffSVG(p); $('#staff').innerHTML = E.lay.svg; $('#ptitle').textContent = p.title;
+  let t = 0; E.starts = p.notes.map(n => { const st = t; t += n[1]; return st; }); buildScopes(p);
+}
+const phraseLen = () => Math.ceil(E.c.phrases[E.pi].notes.reduce((a, n) => a + n[1], 0));
+function makeSeg(type, start) { return { type, start, len: type === 'ref' || type === 'play' ? phraseLen() : type === 'count' ? 4 : 2 }; }
+function enterSeg(seg) {
+  E.lastBi = -1; const p = E.c.phrases[E.pi], ph = $('#phase');
+  if (seg.type === 'ref') {
+    resetNotes(p.notes.length); ph.textContent = S.teacher === true && window.TEACHER_REF ? 'お手本（先生の音）♪' : 'お手本 ♪'; ph.className = 'phase ref';
+    const a0 = ac().currentTime + (E.t0 + seg.start * E.beat - performance.now() / 1000);
+    p.notes.forEach((n, i) => refNote(n[0], a0 + E.starts[i] * E.beat, n[1] * E.beat * 0.9));
+  } else if (seg.type === 'count') { resetNotes(p.notes.length); }
+  else if (seg.type === 'play') { E.res = p.notes.map(() => ({ cents: [], trace: [], done: false })); clearScopes(); ph.textContent = '♪ 吹く！'; ph.className = 'phase play'; if (fxCanvas) burst(fxCanvas.clientWidth * .5, fxCanvas.clientHeight * .3, '#35d6c8', 18); }
+  else if (seg.type === 'rest') { coachSummary(); const r = E.res.filter(x => x.j); const pp = r.filter(x => x.j === 'P').length; ph.textContent = pp === r.length && r.length ? 'ALL PERFECT!!' : `${pp}/${r.length} PERFECT`; ph.className = 'phase rest';
+    if (pp === r.length && r.length) { burst(fxCanvas.clientWidth * .3, fxCanvas.clientHeight * .5, '#ffd54a', 60, 1.3); burst(fxCanvas.clientWidth * .7, fxCanvas.clientHeight * .5, '#35d6c8', 60, 1.3); score += 300; $('#score').textContent = score.toLocaleString(); buddy('fire', 'オールパーフェクト！！+300', true); } }
+  const cur = $('#cur'); if (cur) cur.setAttribute('opacity', seg.type === 'ref' || seg.type === 'play' ? '.85' : '0');
+  if (cur) cur.setAttribute('fill', seg.type === 'ref' ? 'var(--accent2)' : 'var(--perfect)');
+}
+function exitSeg(seg) {
+  if (seg.type === 'play') E.res.forEach((r, i) => { if (!r.done) judgeNote(i); });
+  if (seg.type === 'rest') {
+    if ((performance.now() / 1000 - E.t0) >= E.s.dur) { E.done = true; finish(false); return; }
+    E.rep++; if (E.rep >= E.c.reps) { E.rep = 0; E.pi = (E.pi + 1) % E.c.phrases.length; setPhrase(E.pi); }
+  }
+}
+const nextType = t => t === 'ref' ? 'count' : t === 'count' ? 'play' : t === 'play' ? 'rest' : (E.rep === 0 ? 'ref' : 'count');
+function tickPhrase() {
+  if (!E || E.done) return;
+  const now = performance.now() / 1000, B = (now - E.t0) / E.beat, left = Math.max(0, E.s.dur - Math.max(0, now - E.t0));
+  $('#time').textContent = Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0');
+  if (B < 0) { raf = requestAnimationFrame(tickPhrase); return; }
+  while (B >= E.seg.start + E.seg.len) { const prev = E.seg; exitSeg(prev); if (!E || E.done) return; E.seg = makeSeg(nextType(prev.type), prev.start + prev.len); enterSeg(E.seg); }
+  const seg = E.seg, bIn = B - seg.start, bi = Math.floor(bIn), ph = $('#phase');
+  if (bi !== E.lastBi) { E.lastBi = bi;
+    if (seg.type === 'count') { SFX.click(bi === 0); ph.textContent = ['1', '2', '3', 'はい!'][bi]; ph.className = 'phase count' + (bi === 3 ? ' go' : ''); TTS.say(['c1', 'c2', 'c3', 'go'][bi]); }
+    else if (seg.type === 'play' || seg.type === 'ref') SFX.click(bi % 4 === 0, true);
+  }
+  if (seg.type === 'ref' || seg.type === 'play') { const cur = $('#cur'); if (cur) cur.setAttribute('x', X0 + Math.min(bIn, E.lay.total) * PPB + 12); }
+  const d = detect();
+  if (seg.type === 'play' && d) collect(d, bIn);
+  else if (seg.type !== 'play') setNeedle(0, false);
+  if (d) E.prevRms = d.rms * 0.6 + E.prevRms * 0.4;
+  if (E && !E.done) raf = requestAnimationFrame(tickPhrase);
+}
+function collect(d, bIn) {
+  const p = E.c.phrases[E.pi];
+  p.notes.forEach((n, i) => {
+    const st = E.starts[i], len = n[1], r = E.res[i]; if (r.done) return;
+    if (bIn >= st - (E.mode === 'attack' ? 0.3 : 0.15) && bIn < st + len) { r.trace.push({ b: bIn - st, rms: d.rms, c: d.f0 ? centsTo(d, n[0]) : null }); if (bIn >= st - 0.05) { scopeLive(i); drawScope(i, r, len, null); } }
+    if (bIn >= st && bIn < st + len) {
+      if (E.mode === 'bend') { const k = Math.min(3, Math.floor((bIn - st) / (len / 4))); if (k !== E.bstep) { E.bstep = k; const ca = $('#coacha'); if (ca) { ca.textContent = BEND_STEPS[k]; $('#coachn').textContent = '今'; $('#coachv').textContent = ['まっすぐ', '↓ 下げる', '↑ 上げる', '→ 真ん中'][k]; $('#coachnum').textContent = ''; } } }
+      if (d.f0) { const c = centsTo(d, n[0]); setNeedle(c, true); $('#now').textContent = midiName(d.midi); $('#cen').textContent = (c > 0 ? '+' : '') + c.toFixed(0);
+        if (bIn >= st + Math.min(0.3 * len, 0.4) && bIn <= st + len - Math.min(0.15 * len, 0.25)) r.cents.push(c);
+}
+      else setNeedle(0, false);
+    }
+    if (bIn >= st + len) judgeNote(i);
+  });
+}
+// ---------- big coach card (next action) ----------
+const LV = ['l0', 'l1', 'l2', 'l3'];
+const sgn = x => (x > 0 ? '+' : x < 0 ? '−' : '±') + Math.abs(Math.round(x));
+const okv = x => x !== null && x !== undefined;
+function coachHTML(msg) { return `<div class="coach" id="coach"><div class="cv"><span class="cn" id="coachn">次の一手</span><b id="coachv">—</b><small id="coachnum"></small></div><div class="ca"><div class="lab">次はこうする</div><div class="act" id="coacha">${msg || 'お手本を聴いて、「はい！」で入ろう'}</div><div class="sub" id="coachs"></div></div></div>`; }
+function setCoach(a, who) {
+  const el = $('#coach'); if (!el) return;
+  el.className = 'coach ' + LV[a.lvl]; void el.offsetWidth; el.classList.add('flash');
+  $('#coachn').textContent = who || ''; $('#coachv').textContent = a.verdict; $('#coachnum').textContent = a.num || '';
+  $('#coacha').textContent = a.action; $('#coachs').textContent = a.sub || '';
+}
+function coachSummary() {
+  const as = E.res.filter(x => x.a); if (!as.length) return;
+  const w = as.reduce((a, b) => b.a.lvl > a.a.lvl ? b : a);
+  setCoach(w.a, as.every(x => x.a.lvl === 0) ? 'このテイク：全部OK' : '次のテイクはこれだけ意識');
+}
+const HOWTO = {
+  attack: '白い破線＝先生の音程の線（出だしを拍に合わせて表示）。横＝時間（白い点線＝拍、緑の縦帯＝拍の±60ms）、縦＝音程（金帯＝±10・緑帯＝±25セント）、下の灰色＝音量。▲が音の出た瞬間、水色の線が音程の決まった瞬間、赤い帯は音程が決まるまでの迷い時間。',
+  long: '白い破線＝先生の音程の線（レッスン録音から）。横＝音の長さ全体（点線＝拍）、縦＝音程（金帯＝±10・緑帯＝±25セント、ロングトーンは拡大表示）、下の灰色＝音量。白い太線が前半と後半の平均。右肩下がりなら後半で沈んでいる＝息の圧が落ちている。',
+  slide: '横＝時間（点線＝拍）、縦＝音程。水色の線はスライドが着地して音程が合った瞬間、赤い帯は着地までの迷い時間。点が上から降りてくる＝スライドが届く前に吹いている、下から上がる＝行き過ぎて戻している。',
+  lock: '横＝時間（点線＝拍）、縦＝音程。★の音が弱点。水色の線は音程が合った瞬間、赤い帯は合うまでの迷い時間。',
+};
+function howtoHTML(mode) { return `<details class="howto"><summary>グラフの見方</summary><div>${HOWTO[mode]}</div></details>`; }
+
+// ---------- per-note scopes (all phrase stages) ----------
+const LAT0 = 55; // detector window latency, calibrated with teacher attacks at known beat times
+const outLat = () => { try { return AC ? ((AC.outputLatency || 0) + (AC.baseLatency || 0)) * 1000 : 0; } catch (e) { return 0; } };
+const lat = () => LAT0 + outLat() + (+S.tcal || 0); // analysis window latency (ms)
+function buildScopes(p) {
+  const box = $('#scope'); if (!box) return; const n = p.notes.length, w = n === 1 ? 720 : n === 2 ? 520 : 360;
+  box.style.setProperty('--n', Math.min(n, 4)); box.style.setProperty('--nw', n > 4 ? 3 : n === 1 ? 1 : 2); box.classList.toggle('one', n === 1);
+  box.innerHTML = p.notes.map((nt, i) => `<div class="sp" id="sp-${i}"><div class="spn">${i + 1}音目 <span>${midiName(nt[0])}${(p.focus || []).includes(i) ? ' ★' : ''}</span></div><canvas id="sc-${i}" width="${w}" height="200"></canvas><div class="chk" id="ck-${i}"><span>—</span></div></div>`).join('');
+  p.notes.forEach((nt, i) => drawScope(i, { trace: [] }, nt[1], null));
+}
+function clearScopes() { const p = E.c.phrases[E.pi]; p.notes.forEach((nt, i) => { drawScope(i, { trace: [] }, nt[1], null); const ck = $('#ck-' + i); if (ck) ck.innerHTML = '<span>—</span>'; const sp = $('#sp-' + i); if (sp) sp.className = 'sp'; }); }
+function scopeLive(i) { document.querySelectorAll('.sp').forEach((sp, k) => { if (!sp.classList.contains('judged')) sp.classList.toggle('live', k === i); }); }
+function analyzeAttack(r, med, len = 1) {
+  const tr = r.trace, bt = E.beat * 1000; const peak = tr.reduce((m, p) => Math.max(m, p.rms), 0); const thr = Math.max(0.008, peak * 0.35);
+  // 前の音の残りを「出だし」と誤認しないよう、拍の前後で音量の谷（舌で区切った瞬間）を探し、そこからの立ち上がりを出だしとする
+  const win = tr.filter(p => p.b >= -0.3 && p.b <= Math.min(0.45, len * 0.6)); let on = null, legato = false;
+  if (win.length) { let mi = 0; win.forEach((p, k) => { if (p.rms < win[mi].rms) mi = k; });
+    const lo = win[mi].rms, loudBefore = win.slice(0, mi + 1).some(p => p.rms > thr);
+    if (loudBefore && lo > peak * 0.6) legato = true;
+    else { const thr2 = Math.max(thr, lo + (peak - lo) * 0.5); on = win.slice(mi).find(p => p.rms > thr2) || null; } }
+  if (!on && !legato) on = tr.find(p => p.b >= -0.3 && p.rms > thr) || null;
+  const onMs = on ? on.b * bt - lat() : null;
+  let lockMs = null, run = 0, runStart = null, first = null;
+  if (on) { for (const p of tr) { if (p.b < on.b) continue; if (p.c !== null && Math.abs(p.c) <= 25) { if (!run) runStart = p.b; run++; if (run >= 3) { lockMs = Math.max(0, (runStart - on.b) * bt); break; } } else run = 0; }
+    const f = tr.filter(p => p.b >= on.b && p.c !== null).slice(0, 3).map(p => p.c); if (f.length) first = f.reduce((a, c) => a + c, 0) / f.length; }
+  const tj = onMs === null ? 3 : Math.abs(onMs) <= 60 ? 0 : Math.abs(onMs) <= 110 ? 1 : 2;
+  const lj = lockMs === null ? 2 : lockMs <= 80 ? 0 : lockMs <= 150 ? 1 : 2;
+  return { onMs, lockMs, med, first, legato, levels: [legato ? 2 : tj, lj, 0] };
+}
+function analyzeLong(r, med, len) {
+  const a = Math.min(.3 * len, .4), b = len - Math.min(.15 * len, .25);
+  const pts = r.trace.filter(p => p.c !== null && p.b >= a && p.b <= b); const pl = 'PGOM'.indexOf(judgeCents(med));
+  if (pts.length < 6) return { med, sd: null, early: null, late: null, drift: null, levels: [0, 0, pl] };
+  const k = Math.max(2, Math.floor(pts.length / 3)); const early = mean(pts.slice(0, k).map(p => p.c)), late = mean(pts.slice(-k).map(p => p.c));
+  const sd = Math.sqrt(mean(pts.map(p => (p.c - med) * (p.c - med)))), drift = late - early, ad = Math.abs(drift);
+  return { med, sd, early, late, drift, levels: [ad <= 8 ? 0 : ad <= 15 ? 1 : ad <= 25 ? 2 : 3, sd <= 6 ? 0 : sd <= 10 ? 1 : sd <= 16 ? 2 : 3, pl] };
+}
+function analyzeLock(r, med) {
+  const bt = E.beat * 1000, from = lat() / bt; let run = 0, rs = null, lockMs = null;
+  for (const p of r.trace) { if (p.b < from) continue; if (p.c !== null && Math.abs(p.c) <= 25) { if (!run) rs = p.b; if (++run >= 3) { lockMs = Math.max(0, rs * bt - lat()); break; } } else run = 0; }
+  const f = r.trace.filter(p => p.b >= from && p.c !== null).slice(0, 3).map(p => p.c); const first = f.length ? mean(f) : null;
+  const lim = Math.min(220, bt * .5);
+  return { lockMs, first, med, levels: [lockMs === null ? 2 : lockMs <= lim * .55 ? 0 : lockMs <= lim ? 1 : 2, 'PGOM'.indexOf(judgeCents(med))] };
+}
+function pitchTip(m, med) {
+  if (m % 12 === 7 && med > 0) return '4番ポジションを指1本ぶん遠くに';
+  if (m % 12 === 10 && med < 0) return '開放のB♭は下がりがち。唇の支えを抜かない';
+  return med > 0 ? 'スライドを少し外へ。押し込まず、息のスピードだけで' : '息のスピードを上げて、ツボの真ん中へ';
+}
+// -> { lvl, verdict, num, action, sub, chips }
+function advise(mode, v, m) {
+  if (!v) return { lvl: 3, verdict: '音なし', num: '', action: 'マイクに向けて、もう少しはっきり吹こう', sub: '', chips: [{ lvl: 3, text: '音なし' }] };
+  const items = [];
+  if (mode === 'attack') {
+    if (v.legato) return { lvl: 2, verdict: '音が切れていない', num: '', action: '前の音とつながっている。舌で一瞬だけ区切って「ティ」', sub: 'タンギングで音量の谷ができないと、出だしの位置が測れません', chips: [{ lvl: 2, text: '区切りなし' }] };
+    if (v.onMs === null) return { lvl: 3, verdict: '出だし不明', num: '', action: 'ミュートでも、舌で「ティ」とはっきり出そう', sub: '', chips: [{ lvl: 3, text: '出だし検出なし' }] };
+    items.push({ lvl: v.levels[0], pri: 2, verdict: v.onMs > 0 ? '遅い' : '早い', num: sgn(v.onMs) + 'ms', action: v.onMs > 0 ? '息は拍の前に準備。舌は「離すだけ」' : '「はい」の次の拍の頭を待ってから出る', ok: '拍 ' + sgn(v.onMs) + 'ms' });
+    items.push({ lvl: v.levels[1], pri: 3, verdict: v.lockMs === null ? '音程が迷子' : '決まるのが遅い', num: v.lockMs === null ? '' : Math.round(v.lockMs) + 'ms',
+      action: v.first !== null && v.first < -25 ? '下からずり上がっている。舌を離す前に、狙う音を頭で鳴らす' : v.first !== null && v.first > 25 ? '上から落ちてくる。押し込まず、息のスピードで当てる' : '出だしが揺れる。口の形を先に作ってから舌を離す',
+      ok: '決まる ' + (v.lockMs === null ? '—' : Math.round(v.lockMs) + 'ms') });
+  } else if (mode === 'long') {
+    if (okv(v.drift)) items.push({ lvl: v.levels[0], pri: 3, verdict: v.drift < 0 ? '後半で下がる' : '後半で上ずる', num: sgn(v.drift) + '¢', action: v.drift < 0 ? '最後の2拍で息の圧を足す' : '後半に押し込まない。息のスピードだけを保つ', ok: '後半 ' + sgn(v.drift) + '¢' });
+    if (okv(v.sd)) items.push({ lvl: v.levels[1], pri: 2, verdict: '揺れている', num: '±' + Math.round(v.sd) + '¢', action: '息をまっすぐ一本に。お腹で支え、唇は動かさない', ok: '揺れ ±' + Math.round(v.sd) + '¢' });
+  } else {
+    const sl = mode === 'slide';
+    items.push({ lvl: v.levels[0], pri: 3, verdict: v.lockMs === null ? '音程が合わない' : sl ? '着地が遅い' : '合うまで遅い', num: v.lockMs === null ? '' : Math.round(v.lockMs) + 'ms',
+      action: sl ? (v.first !== null && v.first > 25 ? '上から寄っている＝スライドが届く前に吹いている。前の音の最後で動き出す' : v.first !== null && v.first < -25 ? '下から寄っている＝行き過ぎて戻している。止める位置を体で覚える' : '握らず指の間で遊ばせて、拍の直前に着地') : '音が変わる直前に、次の音を頭で鳴らしておく',
+      ok: (sl ? '着地 ' : '合う ') + (v.lockMs === null ? '—' : Math.round(v.lockMs) + 'ms') });
+  }
+  const pl = 'PGOM'.indexOf(judgeCents(v.med));
+  items.push({ lvl: pl, pri: 1, verdict: v.med > 0 ? '高い' : '低い', num: sgn(v.med) + '¢', action: pitchTip(m, v.med), ok: '音程 ' + sgn(v.med) + '¢' });
+  const chips = items.map(x => ({ lvl: x.lvl, text: x.ok }));
+  const bad = items.filter(x => x.lvl > 0).sort((a, b) => b.lvl - a.lvl || b.pri - a.pri);
+  const okList = items.filter(x => x.lvl === 0).map(x => '✓ ' + x.ok);
+  if (!bad.length) return { lvl: 0, verdict: '理想！', num: '', action: 'この吹き方を体に覚えさせて、次も同じように', sub: okList.join('　'), chips };
+  const top = bad[0];
+  return { lvl: top.lvl, verdict: top.verdict, num: top.num, action: top.action, sub: bad.slice(1).map(x => '△ ' + x.verdict + ' ' + x.num).concat(okList).join('　'), chips };
+}
+function drawScope(i, r, len, v) {
+  const cv = $('#sc-' + i); if (!cv) return; const g = cv.getContext('2d'); if (!g) return; const W = cv.width, H = cv.height;
+  const css = getComputedStyle(document.documentElement), col = n => css.getPropertyValue(n).trim();
+  const mode = E ? E.mode : 'attack', bt = E ? E.beat * 1000 : 750;
+  const msMin = mode === 'attack' ? -250 : -150, msMax = mode === 'attack' ? Math.max(400, Math.min(700, len * bt)) : Math.max(400, len * bt);
+  const span = mode === 'long' ? 50 : 100;
+  const X = ms => (ms - msMin) / (msMax - msMin) * W, Y = c => H * 0.42 - Math.max(-span, Math.min(span, c)) / span * (H * 0.36);
+  g.clearRect(0, 0, W, H); g.fillStyle = col('--bg'); g.fillRect(0, 0, W, H);
+  if (mode === 'attack') { g.fillStyle = 'rgba(74,222,128,.10)'; g.fillRect(X(-60), 0, X(60) - X(-60), H); }
+  g.fillStyle = 'rgba(74,222,128,.16)'; g.fillRect(0, Y(25), W, Y(-25) - Y(25)); g.fillStyle = 'rgba(255,213,74,.26)'; g.fillRect(0, Y(10), W, Y(-10) - Y(10));
+  g.strokeStyle = col('--fg'); g.lineWidth = 1.5; g.setLineDash([5, 5]);
+  for (let b = 0; b * bt <= msMax; b++) { if (b > 0 && mode === 'attack') break; g.globalAlpha = b ? .35 : 1; g.beginPath(); g.moveTo(X(b * bt), 0); g.lineTo(X(b * bt), H); g.stroke(); }
+  g.globalAlpha = 1; g.setLineDash([]);
+  g.font = '700 20px Rajdhani, "Zen Kaku Gothic New", sans-serif'; g.fillStyle = col('--mute'); g.fillText('拍', X(0) + 5, 20); g.fillText('+25', 4, Y(25) - 4); g.fillText('−25', 4, Y(-25) + 19);
+  const tr = r.trace || []; const tx = p => X(p.b * bt - lat());
+  if (tr.length) { g.fillStyle = 'rgba(142,152,173,.35)'; g.beginPath(); g.moveTo(tx(tr[0]), H); const peak = Math.max(0.02, ...tr.map(p => p.rms)); for (const p of tr) g.lineTo(tx(p), H - p.rms / peak * H * 0.2); g.lineTo(tx(tr[tr.length - 1]), H); g.fill(); }
+  if (v && mode === 'attack' && v.onMs !== null && v.lockMs !== null && v.levels[1] > 0) { g.fillStyle = 'rgba(248,113,113,.22)'; g.fillRect(X(v.onMs), 0, X(v.onMs + v.lockMs) - X(v.onMs), H); }
+  if (v && (mode === 'slide' || mode === 'lock') && okv(v.lockMs) && v.levels[0] > 0) { g.fillStyle = 'rgba(248,113,113,.22)'; g.fillRect(X(0), 0, X(v.lockMs) - X(0), H); }
+  if (mode === 'bend') { const k = len / 8 * bt, G = [[0, 0], [2, 0], [3.3, -30], [4, -30], [5.2, 10], [6, 10], [6.6, 0], [8, 0]];
+    g.strokeStyle = col('--accent'); g.lineWidth = 3; g.setLineDash([9, 6]); g.beginPath(); G.forEach(([b, c], q) => q ? g.lineTo(X(b * k), Y(c)) : g.moveTo(X(b * k), Y(c))); g.stroke(); g.setLineDash([]);
+    g.font = '700 18px "Zen Kaku Gothic New", sans-serif'; g.fillStyle = col('--accent'); g.fillText('下げる', X(3.2 * k), Y(-30) + 22); g.fillText('+10まで', X(5 * k), Y(10) - 8); g.fillText('真ん中', X(6.8 * k), Y(0) - 8);
+    if (v && v.bend) { g.font = '700 22px Rajdhani, "Zen Kaku Gothic New", sans-serif'; g.fillStyle = col('--fg'); g.textAlign = 'right'; g.fillText(`下限 ${sgn(v.low)}¢ / 上限 ${sgn(v.top)}¢ / 戻り ${sgn(v.end)}¢`, W - 8, H - 10); g.textAlign = 'left'; } }
+  { const rm = mode === 'bend' ? null : refMeta(E ? E.c.phrases[E.pi].notes[i][0] : 0, len * bt / 1000); if (rm && rm.m.tr && rm.m.tr.length) { const t0 = (rm.m.stable - rm.m.onset) * 1000;
+      g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 2.5; g.setLineDash([7, 5]); g.beginPath(); rm.m.tr.forEach((c, k) => { const x = X(t0 + k * 20), y = Y(c); if (x > W) return; k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.setLineDash([]);
+      g.font = '700 18px "Zen Kaku Gothic New", sans-serif'; g.fillStyle = 'rgba(255,255,255,.8)'; g.fillText('先生', Math.min(X(t0 + rm.m.tr.length * 20) + 4, W - 44), Y(rm.m.tr[Math.min(rm.m.tr.length - 1, 5)]) - 6); } }
+  for (const p of tr) { if (p.c === null) continue; const a = Math.abs(p.c); g.fillStyle = a <= 10 ? col('--perfect') : a <= 25 ? col('--good') : col('--bad'); g.beginPath(); g.arc(tx(p), Y(p.c), 3.6, 0, 6.3); g.fill(); }
+  if (!v) return;
+  g.font = '700 22px Rajdhani, "Zen Kaku Gothic New", sans-serif';
+  if (mode === 'attack') {
+    if (v.onMs !== null) { const x = X(v.onMs); g.fillStyle = ['#ffd54a', '#4ade80', '#fbbf24', '#f87171'][v.levels[0]]; g.beginPath(); g.moveTo(x, H - 30); g.lineTo(x - 9, H - 14); g.lineTo(x + 9, H - 14); g.fill(); }
+    if (v.onMs !== null && v.lockMs !== null) { const x = X(v.onMs + v.lockMs); g.strokeStyle = col('--accent2'); g.lineWidth = 3; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H - 30); g.stroke(); g.fillStyle = col('--accent2'); g.fillText(Math.round(v.lockMs) + 'ms', Math.min(x + 4, W - 64), 40); }
+  } else if (mode === 'long') {
+    if (okv(v.early)) { const a = Math.min(.3 * len, .4) * bt - lat(), b2 = (len - Math.min(.15 * len, .25)) * bt - lat(), th = (b2 - a) / 3, c2 = ['#ffd54a', '#4ade80', '#fbbf24', '#f87171'][v.levels[0]];
+      g.strokeStyle = col('--fg'); g.lineWidth = 5; g.beginPath(); g.moveTo(X(a), Y(v.early)); g.lineTo(X(a + th), Y(v.early)); g.stroke(); g.beginPath(); g.moveTo(X(b2 - th), Y(v.late)); g.lineTo(X(b2), Y(v.late)); g.stroke();
+      g.strokeStyle = c2; g.lineWidth = 3; g.setLineDash([6, 4]); g.beginPath(); g.moveTo(X(a + th), Y(v.early)); g.lineTo(X(b2 - th), Y(v.late)); g.stroke(); g.setLineDash([]);
+      g.fillStyle = c2; g.textAlign = 'right'; g.fillText('後半 ' + sgn(v.drift) + '¢　揺れ ±' + Math.round(v.sd) + '¢', W - 8, 22); g.textAlign = 'left'; }
+  } else if (okv(v.lockMs)) { const x = X(v.lockMs); g.strokeStyle = col('--accent2'); g.lineWidth = 3; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H - 30); g.stroke(); g.fillStyle = col('--accent2'); g.fillText(Math.round(v.lockMs) + 'ms', Math.min(x + 4, W - 64), 40); }
+}
+// ---------- breath curve ----------
+function drawBreath(cur, prev) {
+  const cv = $('#bcv'); if (!cv) return; const g = cv.getContext('2d'); if (!g) return; const W = cv.width, H = cv.height;
+  const css = getComputedStyle(document.documentElement), col = n => css.getPropertyValue(n).trim();
+  const X = b => 14 + b / 16 * (W - 28), top = 36, bot = H - 28;
+  const sm = c => c.map((p, k) => { let s = 0, n = 0; for (let q = Math.max(0, k - 4); q <= Math.min(c.length - 1, k + 4); q++) { s += c[q][1]; n++; } return [p[0], s / n]; });
+  const A = sm(cur), B = prev ? sm(prev) : null; const peak = Math.max(0.15, ...A.map(p => p[1]), ...(B ? B.map(p => p[1]) : [0])) * 1.15;
+  const Y = v => bot - v / peak * (bot - top);
+  g.clearRect(0, 0, W, H); g.fillStyle = col('--bg'); g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,176,32,.13)'; g.fillRect(X(12), top - 8, X(16) - X(12), bot - top + 8);
+  g.strokeStyle = col('--line'); g.lineWidth = 1; for (let b = 0; b <= 16; b += 4) { g.beginPath(); g.moveTo(X(b), top - 8); g.lineTo(X(b), bot); g.stroke(); }
+  g.font = '700 18px "Zen Kaku Gothic New", sans-serif'; g.fillStyle = col('--mute'); g.fillText('吐く：一定に細く長く', X(0) + 4, 22); g.fillStyle = col('--accent'); g.textAlign = 'right'; g.fillText('最後の4拍：圧を上げる', W - 14, 22); g.textAlign = 'left';
+  const base = A.filter(p => p[0] < 12).map(p => p[1]);
+  if (base.length > 10) { const m = mean(base); g.strokeStyle = col('--perfect'); g.setLineDash([8, 6]); g.lineWidth = 2; g.beginPath(); g.moveTo(X(0), Y(m)); g.lineTo(X(12), Y(m)); g.lineTo(X(12.6), Y(m * 1.15)); g.lineTo(X(16), Y(m * 1.15)); g.stroke(); g.setLineDash([]); }
+  const line = (c, st, w, dash) => { if (!c || c.length < 2) return; g.strokeStyle = st; g.lineWidth = w; g.setLineDash(dash || []); g.beginPath(); c.forEach((p, k) => k ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.stroke(); g.setLineDash([]); };
+  line(B, col('--mute'), 2, [4, 4]); line(A, col('--accent2'), 3.5);
+  g.font = '600 14px "Zen Kaku Gothic New", sans-serif'; g.fillStyle = col('--mute'); g.fillText('水色：今のサイクル　点線：前のサイクル　金の破線：目標の形', X(0) + 4, H - 8);
+}
+function breathAdvice(j, ratio) {
+  const BA = { P: ['圧UP！', 'この吐き方をキープ。最後の4拍で一段押せている'], G: ['キープ', '最後の4拍、もう一段お腹で押してみよう'], O: ['後半で抜けた', '吐く量を少し減らして、最後の4拍に息を残す'], M: ['息が聞こえない', 'マイクに向けて、もう少し強く吐こう'] };
+  return { lvl: 'PGOM'.indexOf(j), verdict: BA[j][0], num: ratio.toFixed(2) + '×', action: BA[j][1], sub: '最後の4拍の圧 ÷ 吐いている間の平均。1.15×以上で◎' };
+}
+
+function judgeNote(i) {
+  const r = E.res[i]; if (!r || r.done) return; r.done = true; const p = E.c.phrases[E.pi], m = p.notes[i][0], len = p.notes[i][1], focus = (p.focus || []).includes(i);
+  let j, label, why = '', v = null, a;
+  if (r.cents.length < 3) { j = 'M'; label = '?'; why = '音なし'; a = advise(E.mode, null, m); }
+  else {
+    const cs = r.cents.slice().sort((x, y) => x - y), med = cs[Math.floor(cs.length / 2)];
+    if (E.mode === 'bend') v = analyzeBend(r, len);
+    else if (E.mode === 'attack') { v = analyzeAttack(r, med, len); v.levels[2] = 'PGOM'.indexOf(judgeCents(med)); }
+    else if (E.mode === 'long') v = analyzeLong(r, med, len);
+    else v = analyzeLock(r, med);
+    r.v = v; a = E.mode === 'bend' ? adviseBend(v) : advise(E.mode, v, m);
+    j = v ? 'PGOM'[Math.max(...v.levels)] : 'M'; const mc = v && v.bend ? v.end : med; label = (mc > 0 ? '+' : '') + Math.round(mc);
+    if (j !== 'P') why = a.verdict + (a.num ? ' ' + a.num : '');
+    if (m % 12 === 7 && med > 15) buddy('calm', pick(LINES.Ghigh)); else if (m % 12 === 10 && med < -15) buddy('calm', pick(LINES.Bblow));
+    else if (j === 'P') buddy(focus ? 'wow' : 'happy', focus ? '弱点にクリティカル！' : pick(LINES.P)); else if (j === 'G') buddy('happy', pick(LINES.G));
+    else buddy('calm', a.verdict + '！');
+    const sd = Math.sqrt(cs.reduce((s, c) => s + (c - med) * (c - med), 0) / cs.length), R1 = x => okv(x) ? Math.round(x * 10) / 10 : null;
+    stats.push({ note: m, cents: R1(v && v.bend ? v.end : med), sd: R1(sd), j, mode: E.mode, top: v && v.bend ? R1(v.top) : null, low: v && v.bend ? R1(v.low) : null, focus, core: p.core !== false,
+      on: E.mode === 'attack' ? v.onMs : null, lock: E.mode === 'attack' ? v.lockMs : null,
+      arrive: E.mode === 'slide' || E.mode === 'lock' ? R1(v.lockMs) : null, drift: E.mode === 'long' ? R1(v.drift) : null });
+  }
+  if (j === 'M') buddy('sad', pick(LINES.M));
+  { const rm = E.mode === 'bend' ? null : refMeta(m, len * E.beat); if (rm && v) { const tm = rm.m, cmp = E.mode === 'long' ? `先生の揺れ ±${Math.round(tm.sd)}¢・後半 ${sgn(tm.drift)}¢` : (window.TEACHER_REF[m + '_attack'] ? `先生は出てから${window.TEACHER_REF[m + '_attack'].lockOn}msで決まる` : ''); if (cmp) a.sub = (a.sub ? a.sub + '　' : '') + '｜' + cmp; } }
+  r.j = j; r.a = a; colorNote(i, j, label); showJudge(j, why);
+  drawScope(i, r, len, v || { onMs: null, lockMs: null, med: null, levels: [3, 3, 3], first: null });
+  const sp = $('#sp-' + i); if (sp) { sp.classList.remove('live'); sp.classList.add('judged'); }
+  const ck = $('#ck-' + i); if (ck) ck.innerHTML = a.chips.map(c => `<span class="${LV[c.lvl]}">${c.text}</span>`).join('');
+  setCoach(a, `${i + 1}音目 ${midiName(m)}${focus ? ' ★' : ''}`);
+  if (E.c.boss) bossHit(j, focus);
+}
+function bossHit(j, focus) {
+  const dmg = { P: 14, G: 8, O: 3, M: -5 }[j] * (focus && j !== 'M' ? 2 : 1);
+  E.hp = Math.max(0, Math.min(E.c.hp, E.hp - dmg)); $('#hp').style.width = (E.hp / E.c.hp * 100) + '%';
+  const img = $('#bossimg'); if (img && dmg > 0) { img.classList.remove('hurt'); void img.getBBox; img.classList.add('hurt'); SFX.hit(); if (focus) { const t = document.createElement('div'); t.className = 'dmg'; t.textContent = '-' + dmg + ' CRITICAL'; $('.bossbox').appendChild(t); later(() => t.remove(), 900); } }
+  if (E.hp <= 0 && !E.won) { E.won = true; E.done = true; cancelAnimationFrame(raf); TTS.say('v_win'); buddy('fire', '撃破！！やったー！', true);
+    for (let k = 0; k < 8; k++) later(() => burst(Math.random() * fxCanvas.clientWidth, fxCanvas.clientHeight * .4, ['#ffd54a', '#6d3bd6', '#35d6c8', '#ff6b6b'][k % 4], 70, 1.4), k * 120);
+    later(() => finish(true), 1600); }
+}
+
+
+// ---------- karaoke-style daily report ----------
+const AXES = [
+  { k: 'pitch', name: '音程', unit: 'セント' }, { k: 'stab', name: '安定', unit: 'セント' }, { k: 'time', name: '拍', unit: 'ms' },
+  { k: 'lock', name: '立ち上がり', unit: 'ms' }, { k: 'breath', name: '息の支え', unit: '' }, { k: 'boss', name: '苦手克服', unit: '%' },
+];
+const clamp = (x, a = 0, b = 100) => Math.max(a, Math.min(b, x));
+const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+function computeReport(rec, coreOnly) {
+  const D = rec.detail || {}; const all = k => ((D[k] || {}).stats || []).filter(x => !coreOnly || x.core !== false); const good = k => all(k).filter(x => x.note && x.j !== 'M');
+  const notes = ['A2', 'A3', 'A4', 'B1'].flatMap(good);
+  const longs = good('A2'), atk = good('A3');
+  const ons = atk.map(x => x.on).filter(okv), locks = atk.map(x => x.lock).filter(okv), br = all('A1').map(x => x.ratio).filter(x => x);
+  const bj = coreOnly && all('B1').some(x => x.core) ? all('B1').reduce((o, x) => (o[x.j] = (o[x.j] || 0) + 1, o), { P: 0, G: 0, O: 0, M: 0 }) : (D.B1 || {}).judges; const bossAcc = bj ? (bj.P + bj.G * .7 + bj.O * .3) / Math.max(1, bj.P + bj.G + bj.O + bj.M) : null;
+  const fat = ['A2', 'A3', 'A4', 'B1'].map(good).filter(a => a.length >= 6).map(a => { const h = Math.floor(a.length / 2); return mean(a.slice(h).map(x => Math.abs(x.cents))) - mean(a.slice(0, h).map(x => Math.abs(x.cents))); });
+  const bends = all('C1').filter(x => x.mode === 'bend' && okv(x.top));
+  const raw = { bendTop: bends.length ? mean(bends.map(x => x.top)) : null, bendEnd: bends.length ? mean(bends.map(x => x.cents)) : null, pitch: mean(notes.map(x => Math.abs(x.cents))), pitchSigned: mean(notes.map(x => x.cents)), stab: mean(longs.map(x => x.sd).filter(okv)), time: mean(ons.map(Math.abs)), timeSigned: mean(ons), lock: mean(locks),
+    breath: mean(br), boss: bossAcc, drift: mean(longs.map(x => x.drift).filter(okv)), arrive: mean(good('A4').map(x => x.arrive).filter(okv)), fatigue: mean(fat) };
+  const sc = {
+    pitch: raw.pitch === null ? null : clamp(100 - raw.pitch * 2.5), stab: raw.stab === null ? null : clamp(100 - raw.stab * 4),
+    time: raw.time === null ? null : clamp(100 - raw.time / 2), lock: raw.lock === null ? null : clamp(110 - raw.lock / 2.5),
+    breath: raw.breath === null ? null : clamp((raw.breath - 0.7) / 0.45 * 100), boss: raw.boss === null ? null : clamp(raw.boss * 100),
+  };
+  const W = { pitch: 3, stab: 1.5, time: 1, lock: 1.5, breath: 1, boss: 2 }; let tw = 0, ts = 0; for (const a of AXES) if (sc[a.k] !== null) { tw += W[a.k]; ts += sc[a.k] * W[a.k]; }
+  const total = tw ? ts / tw : 0;
+  const weak = [];
+  const byNote = {}; notes.forEach(x => (byNote[x.note] = byNote[x.note] || []).push(x.cents));
+  for (const m in byNote) { const a = byNote[m]; if (a.length < 4) continue; const av = mean(a); if (Math.abs(av) >= 7) weak.push({ sev: Math.abs(av) * 1.2, title: `${midiName(+m)} が平均 ${sgn(av)}セント${av > 0 ? '高い' : '低い'}`,
+    tip: +m % 12 === 7 && av > 0 ? '4番ポジションを指1本ぶん遠くに' : +m % 12 === 10 && av < 0 ? '開放のB♭は下がりやすい音。唇の支えを抜かず、チューニング管も確認' : av > 0 ? 'スライドを少し外へ。押し込みすぎていないか' : 'ツボの低い側に当たっている＝音が暗くなる原因。息のスピードを上げて真ん中へ' }); }
+  if (raw.lock !== null && raw.lock > 80) weak.push({ sev: (raw.lock - 80) / 4, title: `音程が決まるまで平均 ${Math.round(raw.lock)}ms`, tip: '出た瞬間に音程を決める。舌を離す前に狙う音を頭で鳴らす' });
+  if (raw.timeSigned !== null && Math.abs(raw.timeSigned) > 40) weak.push({ sev: (Math.abs(raw.timeSigned) - 40) / 4, title: `拍より平均 ${Math.round(Math.abs(raw.timeSigned))}ms ${raw.timeSigned > 0 ? '遅れて' : '早く'}出ている`, tip: raw.timeSigned > 0 ? '息を拍の前に準備し、舌は離すだけ' : '「はい」の後、拍の頭を待ってから' });
+  if (raw.stab !== null && raw.stab > 7) weak.push({ sev: (raw.stab - 7) * 2, title: `ロングトーンの揺れ ±${raw.stab.toFixed(1)}セント`, tip: '音の最後まで息の圧を保つ。最後の2拍で圧を足す' });
+  if (raw.drift !== null && Math.abs(raw.drift) > 6) weak.push({ sev: Math.abs(raw.drift) * 1.5, title: `ロングトーンの後半で平均 ${sgn(raw.drift)}セント${raw.drift < 0 ? '沈む' : '上ずる'}`, tip: raw.drift < 0 ? '音の最後まで息の圧を保つ。最後の2拍で圧を足す' : '後半に押し込んでいる。息のスピードだけを保つ' });
+  if (raw.arrive !== null && raw.arrive > 130) weak.push({ sev: (raw.arrive - 130) / 5, title: `スライドの着地まで平均 ${Math.round(raw.arrive)}ms`, tip: 'スライドは握らず指の間で遊ばせる。前の音の最後の瞬間に動き出す' });
+  if (raw.breath !== null && raw.breath < 1) weak.push({ sev: (1 - raw.breath) * 40, title: `息の後半が ${Math.round((1 - raw.breath) * 100)}% 弱まっている`, tip: '吐き切る直前こそ腹圧を上げる。呼吸ステージの最後の4拍を意識' });
+  if (raw.fatigue !== null && raw.fatigue > 5) weak.push({ sev: raw.fatigue * 1.5, title: `後半ほど音程のずれが ${sgn(raw.fatigue)}セント増える`, tip: '疲れると握る・ツボから外れる。休みを1拍多めに取り、息から立て直す' });
+  const bossFocus = all('B1').filter(x => x.focus); if (bossFocus.length >= 4) { const miss = bossFocus.filter(x => x.j === 'M' || x.j === 'O').length / bossFocus.length; if (miss > 0.3) weak.push({ sev: miss * 30, title: `苦手フレーズの★の音で ${Math.round(miss * 100)}% 外している`, tip: '★の音だけをロングトーンにして音程を体に覚えさせてから、リズムに戻す' }); }
+  if (raw.bendTop !== null && raw.bendTop < 10) weak.push({ sev: (10 - raw.bendTop) * 1.5 + 4, title: `B♭のベンドで上限 ${sgn(raw.bendTop)}¢（+10まで届かない）`, tip: '息のスピードを上げ、舌を「ティー」に。上に抜けた感覚の少し手前がB♭の正しい場所' });
+  weak.sort((a, b) => b.sev - a.sev);
+  const best = AXES.filter(a => sc[a.k] !== null).sort((a, b) => sc[b.k] - sc[a.k])[0];
+  return { sc, raw, total, weak: weak.slice(0, 3), best };
+}
+function tendencies(raw) {
+  const T = [], A = (v, t) => Math.abs(v) <= t;
+  if (raw.pitchSigned !== null) { const v = raw.pitchSigned; T.push({ name: '音程の中心', val: (v > 4 ? '↑ ' : v < -4 ? '↓ ' : '◎ ') + sgn(v) + '¢', lvl: A(v, 4) ? 0 : A(v, 9) ? 1 : 2, text: v > 4 ? '全体に高め（上ずり型）' : v < -4 ? '全体に低め（沈み型）' : '音程の中心は合っている' }); }
+  if (raw.timeSigned !== null) { const v = raw.timeSigned; T.push({ name: '出だしの拍', val: (v > 25 ? '→ ' : v < -25 ? '← ' : '◎ ') + sgn(v) + 'ms', lvl: A(v, 25) ? 0 : A(v, 60) ? 1 : 2, text: v > 25 ? '出だしが遅れ気味' : v < -25 ? '走り気味（拍より前に出る）' : '拍どおりに出られている' }); }
+  if (raw.lock !== null) { const v = raw.lock; T.push({ name: '音程が決まるまで', val: Math.round(v) + 'ms', lvl: v <= 80 ? 0 : v <= 140 ? 1 : 2, text: v <= 80 ? '出た瞬間に音程が決まる' : v <= 140 ? '出だしで少し迷う' : '出だしの音程が定まらない' }); }
+  if (raw.drift !== null) { const v = raw.drift; T.push({ name: 'ロングトーン後半', val: (v < -5 ? '↓ ' : v > 5 ? '↑ ' : '◎ ') + sgn(v) + '¢', lvl: A(v, 5) ? 0 : A(v, 12) ? 1 : 2, text: v < -5 ? '後半で沈む（息の圧が落ちる）' : v > 5 ? '後半で上ずる（押し込み）' : '最後まで音程キープ' }); }
+  if (raw.stab !== null) { const v = raw.stab; T.push({ name: '音の揺れ', val: '±' + v.toFixed(1) + '¢', lvl: v <= 6 ? 0 : v <= 10 ? 1 : 2, text: v <= 6 ? 'まっすぐ伸びている' : v <= 10 ? '少し揺れる' : '揺れが大きい' }); }
+  if (raw.arrive !== null) { const v = raw.arrive; T.push({ name: 'スライドの着地', val: Math.round(v) + 'ms', lvl: v <= 110 ? 0 : v <= 180 ? 1 : 2, text: v <= 110 ? 'スライドが速く正確' : v <= 180 ? '着地が少し遅れる' : '着地で迷っている' }); }
+  if (raw.breath !== null) { const v = raw.breath; T.push({ name: '息の後半', val: v.toFixed(2) + '×', lvl: v >= 1.1 ? 0 : v >= .95 ? 1 : 2, text: v >= 1.1 ? '最後に圧を上げられている' : v >= .95 ? '横ばい（もう一段押せる）' : '後半で抜けている' }); }
+  if (raw.bendTop !== null && raw.bendTop !== undefined) { const v = raw.bendTop, e = raw.bendEnd; T.push({ name: 'B♭ベンド', val: '上限 ' + sgn(v) + '¢', lvl: v >= 10 ? 0 : v >= 3 ? 1 : 2, text: v >= 10 ? 'B♭のツボの上まで届く' + (Math.abs(e) <= 5 ? '・戻りもOK' : '') : 'B♭のツボの上側に届いていない＝低い側で吹いている' }); }
+  if (raw.fatigue !== null) { const v = raw.fatigue; T.push({ name: '練習後半の崩れ', val: (v > 3 ? '↘ ' : v < -3 ? '↗ ' : '◎ ') + sgn(v) + '¢', lvl: v <= 3 ? 0 : v <= 7 ? 1 : 2, text: v > 3 ? '後半ほど音程が乱れる（集中・スタミナ）' : v < -3 ? '後半ほど良くなる（ウォームアップ型）' : '最初から最後まで一定' }); }
+  return T;
+}
+const tchipsHTML = T => `<div class="tchips">${T.map(t => `<div class="tchip l${t.lvl}"><div class="tn">${t.name}</div><div class="tv">${t.val}</div><div class="tt">${t.text}</div></div>`).join('')}</div>`;
+function stageNext(s) {
+  const SA = computeReport({ detail: { [s.id]: { stats, judges } } }); const top = SA.weak[0]; const T = tendencies(SA.raw);
+  const bad = T.filter(t => t.lvl > 0).sort((a, b) => b.lvl - a.lvl);
+  const nt = top ? top.title : bad.length ? bad[0].text : '目立つ課題なし！', na = top ? top.tip : bad.length ? '' : 'この吹き方を明日も再現しよう';
+  return `<div class="nextcard ${top || bad.length ? '' : 'l0'}"><div class="lab">このステージの傾向 → 次はこれ</div><div class="nt">${nt}</div>${na ? `<div class="na">${na}</div>` : ''}${T.length ? `<div style="margin-top:10px">${tchipsHTML(T)}</div>` : ''}</div>`;
+}
+function noteMapSVG(notes) {
+  const by = {}; notes.forEach(x => (by[x.note] = by[x.note] || []).push(x.cents));
+  const ks = Object.keys(by).map(Number).sort((a, b) => b - a); if (!ks.length) return '<div class="hint">データなし</div>';
+  const W = 320, rh = 28, H = ks.length * rh + 24, cx = 160, X = c => cx + clamp(c, -30, 30) * 3.4;
+  let s = `<rect x="${X(-10)}" y="0" width="${X(10) - X(-10)}" height="${H - 22}" fill="rgba(255,213,74,.14)"/><line x1="${cx}" x2="${cx}" y1="0" y2="${H - 22}" stroke="var(--fg)" stroke-width="1"/>`;
+  ks.forEach((m, k) => { const av = mean(by[m]), y = k * rh + 4, col = Math.abs(av) <= 10 ? 'var(--perfect)' : Math.abs(av) <= 20 ? 'var(--warn)' : 'var(--bad)';
+    s += `<text x="4" y="${y + 17}" font-size="16" font-weight="700" fill="var(--fg)">${midiName(m)}</text><rect x="${Math.min(cx, X(av))}" y="${y + 4}" width="${Math.max(2, Math.abs(X(av) - cx))}" height="17" rx="3" fill="${col}"/><text x="${W - 2}" y="${y + 17}" text-anchor="end" font-size="16" font-weight="700" fill="${col}">${sgn(av)}¢</text>`; });
+  s += `<text x="${X(-30)}" y="${H - 4}" font-size="13" fill="var(--mute)">← 低い</text><text x="${X(30)}" y="${H - 4}" font-size="13" fill="var(--mute)" text-anchor="end">高い →</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="音ごとの音程のずれ">${s}</svg>`;
+}
+function timingSVG(ons, locks) {
+  if (!ons.length && !locks.length) return '<div class="hint">アタックのデータなし</div>';
+  const W = 320, X = ms => 20 + (clamp(ms, -200, 200) + 200) / 400 * (W - 40), L = ms => 20 + clamp(ms, 0, 300) / 300 * (W - 40);
+  let s = `<text x="0" y="14" font-size="14" font-weight="700" fill="var(--fg)">拍とのずれ</text><rect x="${X(-60)}" y="22" width="${X(60) - X(-60)}" height="34" fill="rgba(74,222,128,.16)"/><line x1="${X(0)}" x2="${X(0)}" y1="20" y2="58" stroke="var(--fg)" stroke-dasharray="3 3"/>`;
+  ons.forEach((o, k) => { s += `<circle cx="${X(o)}" cy="${28 + (k % 4) * 7}" r="4.5" fill="${Math.abs(o) <= 60 ? 'var(--good)' : 'var(--bad)'}" opacity=".85"/>`; });
+  if (ons.length) { const m = mean(ons); s += `<path d="M${X(m)} 58 l-7 10 h14 z" fill="var(--accent)"/><text x="${clamp(X(m), 60, W - 60)}" y="84" text-anchor="middle" font-size="15" font-weight="700" fill="var(--accent)">平均 ${sgn(m)}ms</text>`; }
+  s += `<text x="20" y="100" font-size="12" fill="var(--mute)">← 早い</text><text x="${W - 20}" y="100" text-anchor="end" font-size="12" fill="var(--mute)">遅い →</text>`;
+  s += `<text x="0" y="126" font-size="14" font-weight="700" fill="var(--fg)">音程が決まるまで</text><rect x="${L(0)}" y="134" width="${L(80) - L(0)}" height="34" fill="rgba(255,213,74,.16)"/>`;
+  locks.forEach((o, k) => { s += `<circle cx="${L(o)}" cy="${140 + (k % 4) * 7}" r="4.5" fill="${o <= 80 ? 'var(--perfect)' : o <= 150 ? 'var(--warn)' : 'var(--bad)'}" opacity=".85"/>`; });
+  if (locks.length) { const m = mean(locks); s += `<path d="M${L(m)} 170 l-7 10 h14 z" fill="var(--accent)"/><text x="${clamp(L(m), 60, W - 60)}" y="196" text-anchor="middle" font-size="15" font-weight="700" fill="var(--accent)">平均 ${Math.round(m)}ms</text>`; }
+  s += `<text x="20" y="212" font-size="12" fill="var(--mute)">0ms（理想〜80ms）</text><text x="${W - 20}" y="212" text-anchor="end" font-size="12" fill="var(--mute)">300ms</text>`;
+  return `<svg viewBox="0 0 ${W} 218" role="img" aria-label="アタックのタイミング分布">${s}</svg>`;
+}
+function historyTrend(R) {
+  const past = []; const d = new Date(); for (let k = 1; k <= 14; k++) { d.setDate(d.getDate() - 1); const r = S.history[dkey(d)]; if (r && r.sc) past.push(r); }
+  if (!past.length) return '<div class="hint" style="text-align:left">過去の採点がまだありません。明日から「伸びている／落ちている／癖になっている」項目がここに出ます。</div>';
+  const lines = [];
+  const deltas = AXES.map(a => { const pv = past.map(r => r.sc[a.k]).filter(okv); return { a, d: R.sc[a.k] !== null && pv.length ? R.sc[a.k] - mean(pv) : null }; }).filter(x => x.d !== null);
+  const up = deltas.filter(x => x.d >= 3).sort((a, b) => b.d - a.d), dn = deltas.filter(x => x.d <= -3).sort((a, b) => a.d - b.d);
+  if (up.length) lines.push(`<div class="up">▲ 伸びている：${up.slice(0, 3).map(x => `${x.a.name} +${x.d.toFixed(0)}`).join('、')}</div>`);
+  if (dn.length) lines.push(`<div class="down">▼ 落ちている：${dn.slice(0, 3).map(x => `${x.a.name} ${x.d.toFixed(0)}`).join('、')}</div>`);
+  if (!up.length && !dn.length) lines.push('<div>過去の平均とほぼ同じ。安定している＝次に伸びるには新しい刺激が要る</div>');
+  const HB = [{ k: 'pitchSigned', th: 4, pos: '音程が高め', neg: '音程が低め' }, { k: 'timeSigned', th: 25, pos: '出だしが遅れる', neg: '走る' }, { k: 'drift', th: 5, pos: 'ロングトーン後半が上ずる', neg: 'ロングトーン後半が沈む' }];
+  const days = [R.raw].concat(past.map(r => r.raw).filter(Boolean)).slice(0, 7);
+  HB.forEach(h => { const vs = days.map(x => x[h.k]).filter(okv); if (vs.length < 3) return; const cur = R.raw[h.k]; const pos = vs.filter(v => v > h.th).length, neg = vs.filter(v => v < -h.th).length;
+    if (pos >= 3 && pos / vs.length >= .7 && !(okv(cur) && cur < -h.th)) lines.push(`<div class="habit">⚠ 直近${vs.length}回中${pos}回「${h.pos}」＝もう癖。意識して逆側に振る</div>`);
+    else if (neg >= 3 && neg / vs.length >= .7 && !(okv(cur) && cur > h.th)) lines.push(`<div class="habit">⚠ 直近${vs.length}回中${neg}回「${h.neg}」＝もう癖。意識して逆側に振る</div>`); });
+  return lines.join('');
+}
+function radarSVG(sc, prev) {
+  const cx = 150, cy = 140, R = 100, n = AXES.length; const pt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * R * v / 100, cy + Math.sin(a) * R * v / 100]; };
+  let s = ''; [25, 50, 75, 100].forEach(v => { s += `<polygon points="${AXES.map((_, i) => pt(i, v).join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-width="1"/>`; });
+  AXES.forEach((a, i) => { const [x, y] = pt(i, 100), [lx, ly] = pt(i, 122); s += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--line)"/><text x="${lx}" y="${ly + 4}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--fg)">${a.name}</text><text x="${lx}" y="${ly + 19}" text-anchor="middle" font-size="12" fill="var(--accent)">${sc[a.k] === null ? '—' : Math.round(sc[a.k])}</text>`; });
+  if (prev) s += `<polygon points="${AXES.map((a, i) => pt(i, prev[a.k] ?? 0).join(',')).join(' ')}" fill="none" stroke="var(--mute)" stroke-dasharray="4 4" stroke-width="1.5"/>`;
+  s += `<polygon class="radar" points="${AXES.map((a, i) => pt(i, sc[a.k] ?? 0).join(',')).join(' ')}" fill="rgba(53,214,200,.28)" stroke="var(--accent2)" stroke-width="2.5"/>`;
+  return `<svg viewBox="-20 0 340 290" class="radarsvg" role="img" aria-label="今日の項目別スコア">${s}</svg>`;
+}
+function trendSVG() {
+  const d = new Date(); d.setDate(d.getDate() - 13); const pts = [];
+  for (let i = 0; i < 14; i++) { const r = S.history[dkey(d)]; pts.push({ k: dkey(d).slice(5), v: r && r.total ? r.total : null }); d.setDate(d.getDate() + 1); }
+  const W = 300, H = 90, x = i => 10 + i * (W - 20) / 13, y = v => H - 12 - (v - 40) / 60 * (H - 24);
+  const have = pts.map((p, i) => [i, p.v]).filter(p => p[1] !== null);
+  let s = `<line x1="10" x2="${W - 10}" y1="${y(80)}" y2="${y(80)}" stroke="var(--line)" stroke-dasharray="3 3"/><text x="${W - 10}" y="${y(80) - 3}" text-anchor="end" font-size="10" fill="var(--mute)">80点</text>`;
+  if (have.length > 1) s += `<polyline points="${have.map(([i, v]) => x(i) + ',' + y(clamp(v, 40, 100))).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+  have.forEach(([i, v], k) => { s += `<circle cx="${x(i)}" cy="${y(clamp(v, 40, 100))}" r="${k === have.length - 1 ? 5 : 3}" fill="var(--accent)"/>`; });
+  s += `<text x="10" y="${H}" font-size="10" fill="var(--mute)">${pts[0].k}</text><text x="${W - 10}" y="${H}" text-anchor="end" font-size="10" fill="var(--mute)">今日</text>`;
+  return `<svg viewBox="0 0 ${W} ${H + 4}" class="trendsvg" role="img" aria-label="14日間の総合点の推移">${s}</svg>`;
+}
+function report() {
+  stopStage(); const rec = dayRec(); const R = computeReport(rec, true), RA = computeReport(rec, false);
+  let prevRec = null; { const d = new Date(); for (let k = 1; k < 30; k++) { d.setDate(d.getDate() - 1); const r = S.history[dkey(d)]; if (r && r.sc) { prevRec = r; break; } } }
+  rec.total = Math.round(R.total * 1000) / 1000; rec.sc = R.sc; rec.raw = Object.fromEntries(Object.entries(R.raw).map(([k, v]) => [k, okv(v) ? Math.round(v * 10) / 10 : null])); save();
+  const diff = prevRec ? R.total - prevRec.total : null;
+  const comment = R.total >= 90 ? '師匠レベル！！ロングトーンからボスまで隙なし' : R.total >= 80 ? 'かなりいい！苦手1位だけ潰せば90点台' : R.total >= 70 ? 'いい練習だった！明日はカードの1つだけ' : R.total >= 50 ? '伸びしろだらけ！まずは1つだけ意識しよ' : 'やったことがえらい！明日も15分';
+  const T = tendencies(RA.raw), bad = T.filter(t => t.lvl > 0).sort((a, b) => b.lvl - a.lvl), goodT = T.filter(t => t.lvl === 0);
+  const headline = !T.length ? 'データがまだ少ないです。全ステージやると傾向が出ます' : bad.length ? bad.slice(0, 2).map(t => t.text).join('、') + '。' : '大きな偏りなし。今日の吹き方がそのまま基準になる';
+  const strong = goodT.length ? '強み：' + goodT.slice(0, 3).map(t => t.text).join('・') : '';
+  const D = rec.detail || {}; const st = k => ((D[k] || {}).stats || []).filter(x => x.note && x.j !== 'M');
+  const notes = ['A2', 'A3', 'A4', 'B1'].flatMap(st), atk = st('A3');
+  const top = RA.weak[0];
+  view.innerHTML = `<div class="stage"><div class="arena report"><canvas class="fx"></canvas>
+    <div class="rhead">今日の採点 <span>${today()}</span></div>
+    <div class="total"><span id="tot">00.000</span><small>点</small></div>
+    <div class="diff" id="diff"></div><div class="hint" style="grid-column:1/-1;justify-self:center">↑ 定点メニューの点（毎日同じ課題・推移に使う）｜日替わり込みの点 ${RA.total.toFixed(1)}　※傾向と「明日まずこれだけ」は全メニューから</div>
+    <div class="tend"><div class="lab">全体の傾向</div><div class="head">${headline}</div>${strong ? `<div class="strong">${strong}</div>` : ''}${T.length ? tchipsHTML(T) : ''}</div>
+    <div class="nextcard big ${top ? '' : 'l0'}" style="animation: slidein .5s ease-out 2.7s both"><div class="lab">明日の15分で、まずこれだけ</div><div class="nt">${top ? top.title : '目立つ苦手なし！'}</div><div class="na">${top ? top.tip : '全ステージやるとデータが揃って精度が上がります'}</div></div>
+    <div class="rgrid"><div class="rcol">${radarSVG(R.sc, prevRec && prevRec.sc)}<div class="legend"><i class="l1"></i>今日 ${prevRec ? '<i class="l2"></i>前回' : ''}</div></div>
+      <div class="rcol"><div class="wt">苦手 TOP3</div>${RA.weak.length ? RA.weak.map((w, i) => `<div class="weak" style="animation-delay:${2.9 + i * .4}s"><b>${i + 1}</b><div><div class="wtitle">${w.title}</div><div class="wtip">${w.tip}</div></div></div>`).join('') : '<div class="weak" style="animation-delay:2.9s"><b>—</b><div><div class="wtitle">目立つ苦手なし！</div><div class="wtip">データが少ないステージがあれば、全部やると精度が上がります</div></div></div>'}
+      ${R.best ? `<div class="bestline" style="animation-delay:${2.9 + RA.weak.length * .4}s">今日いちばん良かった：<b>${R.best.name}</b>（${Math.round(R.sc[R.best.k])}点）</div>` : ''}
+      <div class="wt" style="margin-top:10px">14日間の総合点</div>${trendSVG()}</div></div>
+    <div class="vgrid"><div class="vbox"><div class="wt">音ごとの上ずり・沈み</div>${noteMapSVG(notes)}</div><div class="vbox"><div class="wt">アタックのタイミング</div>${timingSVG(atk.map(x => x.on).filter(okv), atk.map(x => x.lock).filter(okv))}</div></div>
+    <div class="vbox" style="width:100%"><div class="wt">ここ14日の変化と癖</div><div class="hlist">${historyTrend(R)}</div></div>
+    <div class="row" style="justify-content:center"><button class="btn big" id="hm">🏠 ホームへ</button></div>
+  </div><div id="buddy" class="buddy">${buddySVG()}<div class="bubble">ドゥルルルル……</div></div></div>`;
+  fxCanvas = view.querySelector('canvas.fx'); $('#hm').onclick = home;
+  const t0 = performance.now(), DUR = 2200, el = $('#tot'); let lastTick = 0;
+  const roll = () => { const t = performance.now() - t0;
+    if (t - lastTick > 55) { lastTick = t; const c = ac().currentTime; tone(160 + Math.random() * 40, c, .05, 'square', .05); }
+    if (t < DUR) { el.textContent = (Math.random() * 99.999).toFixed(3).padStart(6, '0'); raf = requestAnimationFrame(roll); return; }
+    el.textContent = R.total.toFixed(3); el.parentNode.classList.add('reveal'); SFX.fanfare();
+    for (let k = 0; k < 8; k++) later(() => burst(Math.random() * fxCanvas.clientWidth, fxCanvas.clientHeight * .25, ['#ffd54a', '#35d6c8', '#ffb020', '#4ade80', '#ff6b9a'][k % 5], 60, 1.3), k * 110);
+    if (diff !== null) $('#diff').innerHTML = `<span class="${diff >= 0 ? 'up' : 'down'}">前回比 ${diff >= 0 ? '▲ +' : '▼ '}${diff.toFixed(3)}</span>`;
+    buddy(R.total >= 80 ? 'fire' : R.total >= 60 ? 'happy' : 'calm', comment, true);
+  };
+  raf = requestAnimationFrame(roll);
+}
+
+// ---------- finish ----------
+function finish(win) {
+  const s = STAGES[stageIdx]; stopStage(); const rec = dayRec();
+  const total = judges.P + judges.G + judges.O + judges.M; const acc = total ? (judges.P + judges.G * .7 + judges.O * .4) / total : 0;
+  const rank = win || acc >= .9 ? 'S' : acc >= .75 ? 'A' : acc >= .55 ? 'B' : acc >= .3 ? 'C' : 'D';
+  const first = !rec.stages[s.id]; const bonus = Math.round(s.xp * (0.5 + acc * 0.5)) + (win ? 100 : 0); const before = level(S.xp);
+  const prev = rec.stages[s.id]; if (!prev || score > prev.score) rec.stages[s.id] = { score, rank, judges, maxCombo, win: !!win };
+  rec.detail = rec.detail || {}; rec.detail[s.id] = { stats: stats.slice(-300), judges };
+  if (first) { S.xp += bonus; rec.xp += bonus; } save(); renderTop(); const lvUp = level(S.xp) > before;
+  SFX.fanfare(); if (lvUp) later(SFX.levelup, 1400);
+  const by = {}; stats.filter(x => x.note && x.j !== 'M').forEach(x => (by[x.note] = by[x.note] || []).push(x.cents));
+  const noteRows = Object.keys(by).sort((a, b) => b - a).map(m => { const a = by[m], av = a.reduce((x, y) => x + y, 0) / a.length; return `<tr><td>${midiName(+m)} 平均</td><td class="${Math.abs(av) <= 10 ? 'okc' : 'ngc'}">${av > 0 ? '+' : ''}${av.toFixed(0)} セント</td></tr>`; }).join('');
+  const allDone = STAGES.every(x => rec.stages[x.id]);
+  const msg = win ? 'ボス撃破！！' : rank === 'S' ? '師匠も唸るレベル！' : rank === 'A' ? 'いい感じ！この調子' : rank === 'B' ? 'まずまず！明日はA狙い' : 'やったことがえらい！';
+  view.innerHTML = `<div class="stage"><div class="arena result-arena"><canvas class="fx"></canvas><div class="result">
+    <div class="stamp r${rank}">${rank}</div><div class="score">${score.toLocaleString()}</div>
+    ${lvUp ? `<div class="levelup">LEVEL UP!  Lv ${level(S.xp)}</div>` : ''}
+    <div class="xpgain">${first ? '+' + bonus + ' XP' : 'ベスト更新チャレンジ（XPは1日1回）'}</div>
+    ${stageNext(s)}<table><tr><td>ど真ん中 PERFECT</td><td>${judges.P}</td></tr><tr><td>いいね GREAT</td><td>${judges.G}</td></tr><tr><td>おしい OK</td><td>${judges.O}</td></tr><tr><td>ミス MISS</td><td>${judges.M}</td></tr><tr><td>最大コンボ</td><td>${maxCombo}</td></tr>${noteRows}</table>
+    <div class="row" style="justify-content:center"><button class="btn big" id="next">${allDone ? '🎤 今日の採点を見る' : '▶ 次のステージへ'}</button><button class="btn ghost" id="again">もう一回</button></div>
+  </div></div><div id="buddy" class="buddy jump">${buddySVG()}<div class="bubble">${msg}</div></div></div>`;
+  fxCanvas = view.querySelector('canvas.fx'); buddy(rank === 'S' || win ? 'fire' : rank === 'D' ? 'calm' : 'happy', msg, true);
+  later(() => { for (let k = 0; k < 7; k++) later(() => burst(Math.random() * fxCanvas.clientWidth, fxCanvas.clientHeight * .3, ['#ffd54a', '#35d6c8', '#ffb020', '#4ade80'][k % 4], 50), k * 150); }, 200);
+  $('#again').onclick = () => runStage(stageIdx);
+  $('#next').onclick = () => { if (allDone) report(); else { const nx = STAGES.findIndex(x => !rec.stages[x.id]); nx < 0 ? home() : runStage(nx); } };
+}
+
+home();
+})();
+
+</script>
+</body>
+</html>
