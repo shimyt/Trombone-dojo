@@ -294,7 +294,7 @@ const TTS = {
     const vs = speechSynthesis.getVoices(); const v = vs.find(v => v.lang === 'ja-JP' && /Otoya|Hattori|Kyoko/.test(v.name)) || vs.find(v => v.lang === 'ja-JP'); if (v) u.voice = v;
     speechSynthesis.cancel(); speechSynthesis.speak(u);
   },
-  say(id) { if (!S.voice) return; this.play(id).then(ok => { if (!ok) this.speak(VOICES[id] || id, id.length <= 4 ? 1.2 : 1.0); }); },
+  say(id) { if (!S.voice || (IOS && micOn)) return; this.play(id).then(ok => { if (!ok) this.speak(VOICES[id] || id, id.length <= 4 ? 1.2 : 1.0); }); },
 };
 if ('speechSynthesis' in window) speechSynthesis.getVoices();
 ['c1', 'c2', 'c3', 'go', 'in', 'out', 'push'].forEach(id => { const a = new Audio('voices/' + id + '.wav'); a.preload = 'auto'; a.onerror = () => { TTS.missing['voices/' + id + '.wav'] = true; }; TTS.cache['voices/' + id + '.wav'] = a; });
@@ -334,6 +334,7 @@ const STAGES = [
 
 // ---------- storage ----------
 const KEY = 'tb15dojo';
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let S = { xp: 0, history: {}, a4: 442, offset: 0, voice: true };
 try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
@@ -356,7 +357,7 @@ function renderTop() {
 
 // ---------- audio ----------
 let AC = null;
-function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); return AC; }
+function ac() { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); AC.onstatechange = () => { if (AC.state === 'interrupted' || AC.state === 'suspended') { try { AC.resume(); } catch (e) {} } }; } if (AC.state === 'suspended') AC.resume(); return AC; }
 function tone(f, t0, dur, type = 'sine', gain = .18) {
   const c = ac(), o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.value = f; o.connect(g); g.connect(c.destination);
   g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + .01); g.gain.exponentialRampToValueAtTime(.001, t0 + dur); o.start(t0); o.stop(t0 + dur + .05);
@@ -410,17 +411,29 @@ const SFX = {
 
 // ---------- mic + pitch ----------
 let analyser = null, buf = null, sr = 44100, micOn = false;
+let micStream = null;
 async function startMic() {
-  if (micOn) return true;
+  if (micOn && micStream && micStream.getAudioTracks().some(t => t.readyState === 'live' && !t.muted)) return true;
+  micOn = false;
   try {
+    if (IOS) { try { speechSynthesis.cancel(); } catch (e) {} try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) {} }
     const st = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    if (micStream) micStream.getTracks().forEach(t => t.stop()); micStream = st;
     const c = ac(); sr = c.sampleRate; const src = c.createMediaStreamSource(st);
     const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 60;
     analyser = c.createAnalyser(); analyser.fftSize = 4096; analyser.smoothingTimeConstant = 0; src.connect(hp); hp.connect(analyser);
     buf = new Float32Array(analyser.fftSize); micOn = true; $('#mic').classList.add('on'); $('#mic span').textContent = 'マイク ON';
+    st.getAudioTracks().forEach(t => { t.onended = micLost; t.onmute = micLost; t.onunmute = () => { $('#mic').classList.add('on'); $('#mic span').textContent = 'マイク ON'; }; });
     return true;
-  } catch (e) { $('#mic span').textContent = 'マイク不可'; toast('マイクが使えません。Chrome/Safariで開き、マイクを許可してください。'); return false; }
+  } catch (e) { $('#mic span').textContent = 'マイク不可'; toast('マイクが使えません。Safariの設定でこのサイトのマイクを許可してください。'); return false; }
 }
+let micRetry = 0;
+function micLost() {
+  const m = $('#mic'); if (m) { m.classList.remove('on'); $('#mic span').textContent = 'マイク 再接続中'; }
+  const now = Date.now(); if (now - micRetry < 1500) return; micRetry = now;
+  setTimeout(async () => { try { if (AC && AC.state !== 'running') await AC.resume(); } catch (e) {} micOn = false; await startMic(); }, 300);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && micStream) { try { if (AC && AC.state !== 'running') AC.resume(); } catch (e) {} if (!micStream.getAudioTracks().some(t => t.readyState === 'live')) micLost(); } });
 function detect() {
   if (!analyser) return null;
   analyser.getFloatTimeDomainData(buf);
@@ -536,7 +549,7 @@ function home() {
     <div class="map">${STAGES.map((s, i) => { const r = rec.stages[s.id]; return `<button class="node ${r ? 'done' : ''} ${s.boss ? 'boss' : ''}" data-i="${i}"><span class="orb">${s.icon}</span><span class="nm">${s.boss ? 'BOSS' : 'STAGE ' + (i + 1)}</span><span class="nn">${s.name}</span><span class="st">${r ? STARS(r.rank) : Math.round(s.dur / 60) + '分'}</span></button>`; }).join('<i class="link"></i>')}</div>
     <div class="row" style="justify-content:center"><button class="btn big" id="go">${doneN === 0 ? '▶ 今日の15分を始める' : doneN === STAGES.length ? '▶ もう一周' : '▶ 続きから'}</button>${doneN ? '<button class="btn ghost big" id="rep">🎤 今日の採点</button>' : ''}</div>
     <div class="row" style="justify-content:space-between;align-items:flex-end">
-      <div class="settings"><label>A4 <input id="a4" type="number" value="${S.a4}" min="430" max="450"> Hz</label><label>ミュート補正 <input id="off" type="number" value="${S.offset}" step="1"> セント</label><label>拍の補正 <input id="tcal" type="number" value="${+S.tcal || 0}" step="10"> ms</label><span id="olat">${AC ? '音の出力遅延 ' + Math.round(outLat()) + 'ms（自動で補正）' : ''}</span><label><input id="voice" type="checkbox" ${S.voice ? 'checked' : ''}> 声で案内</label><span id="vstat"></span></div>
+      <div class="settings"><label>A4 <input id="a4" type="number" value="${S.a4}" min="430" max="450"> Hz</label><label>ミュート補正 <input id="off" type="number" value="${S.offset}" step="1"> セント</label><label>拍の補正 <input id="tcal" type="number" value="${+S.tcal || 0}" step="10"> ms</label><span id="olat">${AC ? '音の出力遅延 ' + Math.round(outLat()) + 'ms（自動で補正）' : ''}</span><label><input id="voice" type="checkbox" ${S.voice ? 'checked' : ''}> 声で案内${IOS ? '（iPhoneでは練習中は鳴らさず、画面表示のみ）' : ''}</label><span id="vstat"></span></div>
       <div><div class="hist" id="hist"></div><div class="histl">過去14日のXP</div></div>
     </div></div>`;
   const go = async i => { if (await startMic()) runStage(i); };
